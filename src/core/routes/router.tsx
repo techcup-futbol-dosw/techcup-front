@@ -1,5 +1,5 @@
 ﻿/**
- * @file src\core\routes\router.ts
+ * @file src\core\routes\router.tsx
  * @description Main source file for the DemoFront application architecture.
  */
 import { createBrowserRouter } from "react-router";
@@ -23,6 +23,7 @@ import { Schedule } from "@/modules/competition/pages/Schedule";
 import { Scores } from "@/modules/competition/pages/Scores";
 import { Tournament } from "@/modules/tournament/pages/Tournament";
 import { RootLayout } from "./RootLayout";
+import { RequirePermission } from "@/core/auth/RequirePermission";
 
 export const router = createBrowserRouter([
   {
@@ -47,7 +48,14 @@ export const router = createBrowserRouter([
       { path: "organizer/payment-report", Component: PaymentReport },
       { path: "organizer/tournaments", Component: ManageTournaments },
       { path: "organizer/tournaments/:id", Component: TournamentDetail },
-      { path: "dashboard-admin", Component: UserManagement },
+      {
+        path: "dashboard-admin",
+        element: (
+            <RequirePermission permission="account:read:any">
+                <UserManagement />
+                </RequirePermission>
+        ),
+      },
       { path: "events", Component: Events },
       { path: "profile", Component: Profile },
       { path: "matches", Component: Matches },
