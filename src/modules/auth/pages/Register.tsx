@@ -16,7 +16,6 @@ const P = {
   bg: "#F2F2F7",
 };
 
-
 const RELATIONS = [
   { value: "ESTUDIANTE",     label: "Estudiante" },
   { value: "GRADUADO",       label: "Graduado" },
@@ -74,7 +73,6 @@ type FormData = {
 
 type FormErrors = Partial<Record<keyof FormData | "general", string>>;
 
-
 const INSTITUTIONAL_REGEX = /\.edu(\.[a-z]{2})?$/i;
 const GMAIL_REGEX = /^[^\s@]+@gmail\.com$/i;
 
@@ -106,12 +104,12 @@ function requiresSemester(relation: RelationValue | ""): boolean {
 function resolveRegisterError(error: unknown): FormErrors {
   if (error instanceof ApiError) {
     if (error.status === 409) return { email: "Este correo ya está registrado." };
+    if (error.status === 422) return { identification: "Este número de identificación ya está registrado." };
     if (error.status === 400) return { general: "Datos inválidos. Revisa el formulario." };
     if (error.message)        return { general: error.message };
   }
   return { general: "No fue posible crear la cuenta. Inténtalo de nuevo." };
 }
-
 
 export function Register() {
   const navigate = useNavigate();
@@ -131,15 +129,13 @@ export function Register() {
     semester: "", identificationType: "", identification: "",
   });
 
-
   const resolveDashboardPath = (roles: string[] | undefined): string => {
     const normalizedRoles = (roles ?? []).map((role) => role.toUpperCase());
-    if (normalizedRoles.includes("ADMIN"))     return "/dashboard-organizer";
+    if (normalizedRoles.includes("ADMIN"))     return "/dashboard-admin";
     if (normalizedRoles.includes("ORGANIZER")) return "/dashboard-organizer";
     if (normalizedRoles.includes("REFEREE"))   return "/dashboard-arbitro";
     return "/dashboard";
   };
-
 
   function validate(): boolean {
     const e: FormErrors = {};
@@ -221,7 +217,7 @@ export function Register() {
       gender:             form.gender,
       relation:           form.relation,
       program:            form.program,
-      semester:           requiresSemester(form.relation) ? Number(form.semester) : 1,
+      semester:           requiresSemester(form.relation) ? Number(form.semester) : null,
       identificationType: form.identificationType,
       identification:     form.identification.trim(),
     };
@@ -229,8 +225,6 @@ export function Register() {
     try {
       await authService.register(payload);
     } catch (error) {
-      console.log("Error completo:", error);
-      console.log("Es ApiError:", error instanceof ApiError);
       setErrors(resolveRegisterError(error));
       setIsLoading(false);
       return;
@@ -263,7 +257,6 @@ export function Register() {
     if (name === "relation" && value !== "ESTUDIANTE")
       setForm((prev) => ({ ...prev, relation: value as RelationValue, semester: "" }));
   };
-
 
   const inputBase: React.CSSProperties = {
     width: "100%", fontSize: "0.92rem", fontWeight: 500,
@@ -299,16 +292,13 @@ export function Register() {
       ? <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors[name]}</p>
       : null;
 
-
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-
-      {/* ── Panel izquierdo — branding ── */}
+    <div className="min-h-screen flex flex-col md:flex-row md:h-screen md:overflow-hidden">
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full md:w-1/2 relative overflow-hidden flex flex-col justify-center p-8 md:p-12 lg:p-16 min-h-[42vh] md:min-h-screen"
+        className="w-full md:w-1/2 relative overflow-hidden flex flex-col justify-center p-8 md:p-12 lg:p-16 min-h-[42vh] md:h-screen md:flex-shrink-0"
         style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}
       >
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -362,9 +352,9 @@ export function Register() {
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full md:w-1/2 bg-white flex items-center justify-center p-8 md:p-12"
+        className="w-full md:w-1/2 bg-white flex items-start justify-center p-8 md:p-12 md:h-screen md:overflow-y-auto"
       >
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md py-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

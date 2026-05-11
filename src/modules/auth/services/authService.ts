@@ -38,7 +38,7 @@ export type RegisterAccountRequestDto = {
     lastName: string;
     birthDate: string;
     relation: string;
-    semester: number;
+    semester: number | null;
     program: string;
     email: string;
     password: string;
