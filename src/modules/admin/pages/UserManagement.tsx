@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+import { useAuth } from "@/core/auth/AuthContext";
 import logoTechcup from "@/assets/logo.png";
 import {
     Search,
@@ -8,6 +10,7 @@ import {
     RefreshCw,
     X,
     Save,
+    LogOut,
 } from "lucide-react";
 import {
     AccountAdminItem,
@@ -24,6 +27,12 @@ const P = {
 };
 
 const PAGE_SIZE = 10;
+
+type AdminHeroPanelProps = {
+    roles: string[];
+    accountId: number | null;
+    onLogout: () => void;
+};
 
 function formatLabel(value: string) {
     return value
@@ -48,10 +57,10 @@ function getErrorMessage(error: unknown) {
     return "Ocurrió un error inesperado.";
 }
 
-function AdminHeroPanel() {
+function AdminHeroPanel({ roles, accountId, onLogout }: AdminHeroPanelProps) {
     return (
         <aside
-            className="relative overflow-hidden flex flex-col justify-center px-10 py-12 lg:px-12 xl:px-16 min-h-[360px] lg:min-h-screen lg:w-[31%]"
+            className="relative overflow-hidden flex flex-col justify-between px-10 py-12 lg:px-12 xl:px-16 min-h-[360px] lg:min-h-screen lg:w-[31%]"
             style={{
                 background: "linear-gradient(160deg, #5C0000 0%, #8B0000 42%, #B81C1C 100%)",
             }}
@@ -81,7 +90,7 @@ function AdminHeroPanel() {
                 />
             </div>
 
-            <div className="relative z-10 max-w-sm">
+            <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-16">
                     <div
                         className="w-11 h-11 bg-white rounded-2xl flex items-center justify-center p-2"
@@ -153,6 +162,60 @@ function AdminHeroPanel() {
                     de manera centralizada.
                 </p>
             </div>
+
+            <div className="relative z-10 pt-8 mt-10 border-t border-white/10">
+                <p
+                    className="text-white/45 mb-3"
+                    style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                    }}
+                >
+                    Sesión actual
+                </p>
+
+                {accountId && (
+                    <p className="text-white/60 mb-3" style={{ fontSize: "0.8rem" }}>
+                        Cuenta #{accountId}
+                    </p>
+                )}
+
+                <div className="flex flex-wrap gap-2 mb-5">
+                    {roles.length > 0 ? (
+                        roles.map((role) => (
+                            <span
+                                key={role}
+                                className="rounded-full px-3 py-1 text-xs font-bold"
+                                style={{
+                                    backgroundColor: "rgba(255,255,255,0.12)",
+                                    color: "#FFFFFF",
+                                    border: "1px solid rgba(255,255,255,0.12)",
+                                }}
+                            >
+                {formatLabel(role)}
+              </span>
+                        ))
+                    ) : (
+                        <span className="text-white/50 text-sm">Sin roles cargados</span>
+                    )}
+                </div>
+
+                <button
+                    type="button"
+                    onClick={onLogout}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-white"
+                    style={{
+                        backgroundColor: "rgba(255,255,255,0.12)",
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        fontWeight: 700,
+                    }}
+                >
+                    <LogOut className="w-4 h-4" />
+                    Cerrar sesión
+                </button>
+            </div>
         </aside>
     );
 }
@@ -176,6 +239,32 @@ export function UserManagement() {
     const [selectedUser, setSelectedUser] = useState<AccountAdminItem | null>(null);
     const [roleDraft, setRoleDraft] = useState<string[]>([]);
     const [roleModalError, setRoleModalError] = useState<string | null>(null);
+
+
+    const navigate = useNavigate();
+
+    const {
+        logout,
+        roles: sessionRoles,
+        permissions,
+        accountId,
+        isAuthenticated,
+        isBootstrapping,
+    } = useAuth();
+
+    useEffect(() => {
+        if (isBootstrapping) return;
+
+        if (!isAuthenticated) {
+            navigate("/login", { replace: true });
+        }
+    }, [isAuthenticated, isBootstrapping, navigate]);
+
+    const canManageRoles =
+        permissions.includes("role:assign:any") ||
+        permissions.includes("role:remove:any");
+
+    const canDeactivateAccounts = permissions.includes("account:deactivate:any");
 
     const foundLabel = useMemo(() => {
         if (totalElements === 1) {
@@ -215,13 +304,17 @@ export function UserManagement() {
     };
 
     useEffect(() => {
+        if (isBootstrapping || !isAuthenticated) return;
+
         loadRoles().catch((err) => setError(getErrorMessage(err)));
-    }, []);
+    }, [isBootstrapping, isAuthenticated]);
 
     useEffect(() => {
+        if (isBootstrapping || !isAuthenticated) return;
+
         loadUsers();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page]);
+    }, [page, isBootstrapping, isAuthenticated]);
 
     const handleSearchSubmit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -315,10 +408,28 @@ export function UserManagement() {
             setError(getErrorMessage(err));
         }
     };
+    const handleLogout = async () => {
+        try {
+            await logout();
+        } finally {
+            navigate("/login", { replace: true });
+        }
+    };
+    if (isBootstrapping) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <p>Cargando sesión...</p>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex flex-col lg:flex-row bg-white">
-            <AdminHeroPanel />
+            <AdminHeroPanel
+                roles={sessionRoles}
+                accountId={accountId}
+                onLogout={handleLogout}
+            />
 
             <main className="flex-1 px-6 py-10 lg:px-14 xl:px-20 lg:py-14 overflow-x-hidden">
                 <div className="w-full max-w-5xl mx-auto">
@@ -533,8 +644,9 @@ export function UserManagement() {
                                                     <button
                                                         type="button"
                                                         onClick={() => openRoleModal(user)}
-                                                        className="rounded-xl border border-black/10 p-2 hover:bg-gray-50"
-                                                        title="Gestionar roles"
+                                                        disabled={!canManageRoles}
+                                                        className="rounded-xl border border-black/10 p-2 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        title={canManageRoles ? "Gestionar roles" : "No tienes permisos para gestionar roles"}
                                                     >
                                                         <UserCog className="w-4 h-4 text-gray-700" />
                                                     </button>
@@ -542,14 +654,17 @@ export function UserManagement() {
                                                     <button
                                                         type="button"
                                                         onClick={() => deactivateUser(user)}
-                                                        disabled={user.status === "INACTIVE"}
+                                                        disabled={user.status === "INACTIVE" || !canDeactivateAccounts}
                                                         className="rounded-xl border border-red-100 p-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                        title="Desactivar cuenta"
+                                                        title={
+                                                            !canDeactivateAccounts
+                                                                ? "No tienes permisos para desactivar cuentas"
+                                                                : user.status === "INACTIVE"
+                                                                    ? "La cuenta ya está inactiva"
+                                                                    : "Desactivar cuenta"
+                                                        }
                                                     >
-                                                        <Ban
-                                                            className="w-4 h-4"
-                                                            style={{ color: P.primary }}
-                                                        />
+                                                        <Ban className="w-4 h-4" style={{ color: P.primary }} />
                                                     </button>
                                                 </div>
                                             </td>
