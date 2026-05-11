@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { Shield, Mail, Lock, Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, Link } from "react-router";
+import { useAuth } from "@/core/auth/AuthContext.tsx";
+import { ApiError } from "@/core/api/http";
 import logoTechcup from "@/assets/logo.png";
 
 const P = {
@@ -26,6 +28,8 @@ export function Login() {
   const [recoveryEmail, setRecoveryEmail] = useState("");
   const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [authError, setAuthError] = useState<string | null>(null);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const personalDomains = ["gmail.com", "outlook.com", "hotmail.com", "yahoo.com"];
@@ -58,22 +62,65 @@ export function Login() {
     if (!formData.email) newErrors.email = "El correo es requerido";
     else if (!isValidEmailType(formData.email)) newErrors.email = "Usa un correo institucional (.edu) o personal válido";
     if (!formData.password) newErrors.password = "La contraseña es requerida";
-    else if (formData.password.length < 6) newErrors.password = "Mínimo 6 caracteres";
+    else if (formData.password.length < 7) newErrors.password = "Mínimo 8 caracteres";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    setAuthError(null);
+
     if (!validate()) return;
+
     setIsLoading(true);
-    setTimeout(() => { setIsLoading(false); navigate("/dashboard"); }, 2000);
+
+    try {
+      const session = await login(
+          formData.email.trim(),
+          formData.password
+      );
+
+      navigate(resolveDashboardPath(session.roles));
+    } catch (error) {
+      setAuthError(resolveLoginErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+  const resolveDashboardPath = (roles: string[] | undefined) => {
+    const normalizedRoles = (roles ?? []).map((role) => role.toUpperCase());
+
+    if (normalizedRoles.includes("ADMIN")) {
+      return "/dashboard-organizer";
+    }
+
+    if (normalizedRoles.includes("ORGANIZER")) {
+      return "/dashboard-organizer";
+    }
+
+    if (normalizedRoles.includes("REFEREE")) {
+      return "/dashboard-arbitro";
+    }
+
+    return "/dashboard";
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name as keyof typeof errors]) setErrors((prev) => ({ ...prev, [name]: undefined }));
+
+    if (errors[name as keyof typeof errors]) {
+      setErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
+
+    if (authError) {
+      setAuthError(null);
+    }
+
     if (name === "email") {
       setEmailSuggestion(value ? suggestEmail(value) : null);
     }
@@ -83,6 +130,28 @@ export function Login() {
     e.preventDefault();
     setIsLoading(true);
     setTimeout(() => { setIsLoading(false); setView("forgot-sent"); }, 1500);
+  };
+
+  const resolveLoginErrorMessage = (error: unknown) => {
+    if (error instanceof ApiError) {
+      if (error.status === 401) {
+        return "Credenciales inválidas";
+      }
+
+      if (error.status === 403) {
+        return "No tienes permisos para acceder";
+      }
+
+      if (error.message) {
+        return error.message;
+      }
+    }
+
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+
+    return "No fue posible iniciar sesión. Inténtalo de nuevo.";
   };
 
   const inputBase: React.CSSProperties = {
@@ -259,6 +328,20 @@ export function Login() {
                     {capsLockPassword && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.secondary, fontWeight: 600 }}>Bloq Mayús está activado</p>}
                     {errors.password && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary }}>{errors.password}</p>}
                   </div>
+
+                  {authError && (
+                      <div
+                          className="rounded-2xl p-3"
+                          style={{
+                            backgroundColor: "rgba(184,28,28,0.08)",
+                            border: "1px solid rgba(184,28,28,0.18)",
+                          }}
+                      >
+                        <p style={{ fontSize: "0.82rem", color: P.primary, fontWeight: 600 }}>
+                          {authError}
+                        </p>
+                      </div>
+                  )}
 
                   {/* Submit */}
                   <motion.button
