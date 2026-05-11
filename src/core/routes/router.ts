@@ -4,7 +4,7 @@
  */
 import { createBrowserRouter } from "react-router";
 import { LandingPage } from "@/modules/auth/pages/LandingPage";
-import { Dashboard } from "@/modules/competition/pages/Dashboard";
+import  Dashboard  from "@/modules/users/pages/Dashboard";
 import { ArbitroDashboard } from "@/modules/teams/pages/ArbitroDashboard";
 import { OrganizerDashboard } from "@/modules/tournament/pages/OrganizerDashboard";
 import { CreateTournament } from "@/modules/tournament/pages/CreateTournament";
@@ -14,7 +14,8 @@ import { TournamentDetail } from "@/modules/tournament/pages/TournamentDetail";
 import { MatchDetail } from "@/modules/teams/pages/MatchDetail";
 import { TeamPrePaymentSetup } from "@/modules/teams/pages/TeamPrePaymentSetup";
 import { Events } from "@/modules/competition/pages/Events";
-import { Profile } from "@/modules/users/pages/Profile";
+import { Profile } from "@/modules/users/pages/Profile.tsx";
+import { SportsProfile } from "@/modules/users/pages/SportsProfile.tsx";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -47,6 +48,7 @@ export const router = createBrowserRouter([
       { path: "organizer/tournaments", Component: ManageTournaments },
       { path: "organizer/tournaments/:id", Component: TournamentDetail },
       { path: "events", Component: Events },
+      { path: "sport-profile", Component: SportsProfile },
       { path: "profile", Component: Profile },
       { path: "matches", Component: Matches },
       { path: "schedule", Component: Schedule },
@@ -55,5 +57,3 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
-
-
