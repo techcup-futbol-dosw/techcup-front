@@ -1,12 +1,13 @@
 ﻿/**
- * @file src\modules\auth\pages\Register.tsx
- * @description Main source file for the DemoFront application architecture.
+ * @file src/modules/auth/pages/Register.tsx
  */
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "motion/react";
-import { Shield, User, Mail, Lock, Eye, EyeOff, Upload, Shirt, CalendarDays, Trophy } from "lucide-react";
-import { useState } from "react";
+import { Shield, User, Mail, Lock, Eye, EyeOff, ChevronDown } from "lucide-react";
 import { useNavigate, Link } from "react-router";
+import { useAuth } from "@/core/auth/AuthContext.tsx";
+import { authService, type RegisterAccountRequestDto } from "@/modules/auth/services/authService";
+import { ApiError } from "@/core/api/http";
 import logoTechcup from "@/assets/logo.png";
 
 const P = {
@@ -15,182 +16,294 @@ const P = {
   bg: "#F2F2F7",
 };
 
+
+const RELATIONS = [
+  { value: "ESTUDIANTE",     label: "Estudiante" },
+  { value: "GRADUADO",       label: "Graduado" },
+  { value: "PROFESOR",       label: "Profesor" },
+  { value: "PERSONAL_ADMIN", label: "Personal administrativo" },
+  { value: "FAMILIAR",       label: "Familiar" },
+] as const;
+
+type RelationValue = typeof RELATIONS[number]["value"];
+
+const PROGRAMS = [
+  { value: "SISTEMAS",                label: "Ingeniería de Sistemas" },
+  { value: "INTELIGENCIA_ARTIFICIAL", label: "Ingeniería de Inteligencia Artificial" },
+  { value: "CIBERSEGURIDAD",          label: "Ingeniería de Ciberseguridad" },
+  { value: "ESTADISTICA",             label: "Ingeniería Estadística" },
+  { value: "BIOTECNOLOGIA",           label: "Ingeniería en Biotecnología" },
+  { value: "CIVIL",                   label: "Ingeniería Civil" },
+  { value: "AMBIENTAL",               label: "Ingeniería Ambiental" },
+  { value: "ELECTRICA",               label: "Ingeniería Eléctrica" },
+  { value: "INDUSTRIAL",              label: "Ingeniería Industrial" },
+  { value: "ELECTRONICA",             label: "Ingeniería Electrónica" },
+  { value: "MECANICA",                label: "Ingeniería Mecánica" },
+  { value: "BIOMEDICA",               label: "Ingeniería Biomédica" },
+  { value: "ECONOMIA",                label: "Economía" },
+  { value: "ADMINISTRACION_EMPRESAS", label: "Administración de Empresas" },
+  { value: "MATEMATICAS",             label: "Matemáticas" },
+] as const;
+
+const GENDERS = [
+  { value: "MALE",   label: "Masculino" },
+  { value: "FEMALE", label: "Femenino" },
+  { value: "OTHER",  label: "Otro" },
+] as const;
+
+const ID_TYPES = [
+  { value: "CC",       label: "Cédula de ciudadanía" },
+  { value: "TI",       label: "Tarjeta de identidad" },
+  { value: "PASSPORT", label: "Pasaporte" },
+] as const;
+
+type FormData = {
+  name: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+  birthDate: string;
+  gender: string;
+  relation: RelationValue | "";
+  program: string;
+  semester: string;
+  identificationType: string;
+  identification: string;
+};
+
+type FormErrors = Partial<Record<keyof FormData | "general", string>>;
+
+
+const INSTITUTIONAL_REGEX = /\.edu(\.[a-z]{2})?$/i;
+const GMAIL_REGEX = /^[^\s@]+@gmail\.com$/i;
+
+function isValidEmail(email: string, relation: RelationValue | ""): boolean {
+  if (!email) return false;
+  if (relation === "FAMILIAR") return GMAIL_REGEX.test(email);
+  return INSTITUTIONAL_REGEX.test(email.toLowerCase().split("@")[1] ?? "");
+}
+
+const EMAIL_TYPOS: Record<string, string> = {
+  "gmal.com":    "gmail.com",
+  "gnail.com":   "gmail.com",
+  "hotnail.com": "hotmail.com",
+  "outlok.com":  "outlook.com",
+  "yaho.com":    "yahoo.com",
+};
+
+function suggestEmail(value: string): string | null {
+  const parts = value.toLowerCase().split("@");
+  if (parts.length !== 2) return null;
+  const fix = EMAIL_TYPOS[parts[1]];
+  return fix ? `${parts[0]}@${fix}` : null;
+}
+
+function requiresSemester(relation: RelationValue | ""): boolean {
+  return relation === "ESTUDIANTE";
+}
+
+function resolveRegisterError(error: unknown): FormErrors {
+  if (error instanceof ApiError) {
+    if (error.status === 409) return { email: "Este correo ya está registrado." };
+    if (error.status === 400) return { general: "Datos inválidos. Revisa el formulario." };
+    if (error.message)        return { general: error.message };
+  }
+  return { general: "No fue posible crear la cuenta. Inténtalo de nuevo." };
+}
+
+
 export function Register() {
-  const weekDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-  const careerOptions = [
-    "Ingeniería de Sistemas",
-    "Ingeniería de Inteligencia Artificial",
-    "Ingeniería de Ciberseguridad",
-    "Ingeniería Estadística",
-  ];
-  const [isLoading, setIsLoading] = useState(false);
-  const [showSportsProfileSetup, setShowSportsProfileSetup] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [formData, setFormData] = useState({ name: "", email: "", password: "", confirmPassword: "" });
-  const [sportsProfile, setSportsProfile] = useState({
-    profilePhotoName: "",
-    preferredPosition: "",
-    favoriteJerseyNumber: "",
-    availabilityDays: [] as string[],
-    semester: "",
-    career: "",
-  });
-  const [errors, setErrors] = useState<{
-    name?: string;
-    email?: string;
-    password?: string;
-    confirmPassword?: string;
-    preferredPosition?: string;
-    favoriteJerseyNumber?: string;
-    availabilityDays?: string;
-    semester?: string;
-    career?: string;
-  }>({});
-  const [capsLockPassword, setCapsLockPassword] = useState(false);
-  const [capsLockConfirm, setCapsLockConfirm] = useState(false);
-  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const personalDomains = ["gmail.com", "outlook.com", "hotmail.com", "yahoo.com"];
+  const [isLoading, setIsLoading]             = useState(false);
+  const [showPassword, setShowPassword]       = useState(false);
+  const [showConfirm, setShowConfirm]         = useState(false);
+  const [capsLockPass, setCapsLockPass]       = useState(false);
+  const [capsLockConf, setCapsLockConf]       = useState(false);
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
+  const [errors, setErrors]                   = useState<FormErrors>({});
 
-  const suggestEmail = (value: string) => {
-    const typoMap: Record<string, string> = {
-      "gmal.com": "gmail.com",
-      "gnail.com": "gmail.com",
-      "hotnail.com": "hotmail.com",
-      "outlok.com": "outlook.com",
-      "yaho.com": "yahoo.com",
-    };
-    const parts = value.toLowerCase().split("@");
-    if (parts.length !== 2) return null;
-    const replacement = typoMap[parts[1]];
-    if (!replacement) return null;
-    return `${parts[0]}@${replacement}`;
+  const [form, setForm] = useState<FormData>({
+    name: "", lastName: "", email: "", password: "", confirmPassword: "",
+    birthDate: "", gender: "", relation: "", program: "",
+    semester: "", identificationType: "", identification: "",
+  });
+
+
+  const resolveDashboardPath = (roles: string[] | undefined): string => {
+    const normalizedRoles = (roles ?? []).map((role) => role.toUpperCase());
+    if (normalizedRoles.includes("ADMIN"))     return "/dashboard-organizer";
+    if (normalizedRoles.includes("ORGANIZER")) return "/dashboard-organizer";
+    if (normalizedRoles.includes("REFEREE"))   return "/dashboard-arbitro";
+    return "/dashboard";
   };
 
-  const isValidEmailType = (email: string) => {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
-    const domain = email.toLowerCase().split("@")[1] ?? "";
-    const isInstitutional = /\.edu(\.[a-z]{2})?$/i.test(domain);
-    const isPersonal = personalDomains.includes(domain);
-    return isInstitutional || isPersonal;
-  };
 
-  const validate = () => {
-    const nextErrors: {
-      name?: string;
-      email?: string;
-      password?: string;
-      confirmPassword?: string;
-      preferredPosition?: string;
-      favoriteJerseyNumber?: string;
-      availabilityDays?: string;
-      semester?: string;
-      career?: string;
-    } = {};
-    if (!formData.name.trim()) nextErrors.name = "El nombre es obligatorio";
-    else if (!/^[A-Za-zÀ-ÿ\s]+$/.test(formData.name.trim())) nextErrors.name = "Solo se permiten letras y espacios";
+  function validate(): boolean {
+    const e: FormErrors = {};
 
-    if (!formData.email.trim()) nextErrors.email = "El correo es obligatorio";
-    else if (!isValidEmailType(formData.email.trim())) nextErrors.email = "Usa un correo institucional (.edu) o personal válido";
+    if (!form.name.trim())
+      e.name = "El nombre es obligatorio";
+    else if (!/^[A-Za-zÀ-ÿ\s]+$/.test(form.name.trim()))
+      e.name = "Solo se permiten letras y espacios";
 
-    if (!formData.password) nextErrors.password = "La contraseña es obligatoria";
-    else if (formData.password.length < 8) nextErrors.password = "Mínimo 8 caracteres";
-    else if (!/[A-Z]/.test(formData.password) || !/[a-z]/.test(formData.password) || !/\d/.test(formData.password)) {
-      nextErrors.password = "Incluye mayúscula, minúscula y número";
+    if (!form.lastName.trim())
+      e.lastName = "El apellido es obligatorio";
+    else if (!/^[A-Za-zÀ-ÿ\s]+$/.test(form.lastName.trim()))
+      e.lastName = "Solo se permiten letras y espacios";
+
+    if (!form.relation)
+      e.relation = "Selecciona tu relación con la institución";
+
+    if (!form.email.trim())
+      e.email = "El correo es obligatorio";
+    else if (!isValidEmail(form.email.trim(), form.relation)) {
+      e.email = form.relation === "FAMILIAR"
+        ? "Los familiares deben usar un correo Gmail"
+        : "Usa un correo institucional (.edu)";
     }
 
-    if (!formData.confirmPassword) nextErrors.confirmPassword = "Confirma la contraseña";
-    else if (formData.confirmPassword !== formData.password) nextErrors.confirmPassword = "Las contraseñas no coinciden";
+    if (!form.password)
+      e.password = "La contraseña es obligatoria";
+    else if (form.password.length < 8)
+      e.password = "Mínimo 8 caracteres";
+    else if (!/[A-Z]/.test(form.password) || !/[a-z]/.test(form.password) || !/\d/.test(form.password))
+      e.password = "Incluye mayúscula, minúscula y número";
 
-    if (!sportsProfile.preferredPosition.trim()) nextErrors.preferredPosition = "Selecciona tu posición de juego";
+    if (!form.confirmPassword)
+      e.confirmPassword = "Confirma la contraseña";
+    else if (form.confirmPassword !== form.password)
+      e.confirmPassword = "Las contraseñas no coinciden";
 
-    const jersey = Number(sportsProfile.favoriteJerseyNumber);
-    if (!sportsProfile.favoriteJerseyNumber.trim()) nextErrors.favoriteJerseyNumber = "Indica tu número de camisa favorito";
-    else if (!Number.isInteger(jersey) || jersey < 0 || jersey > 99) nextErrors.favoriteJerseyNumber = "Debe ser un número entre 0 y 99";
+    if (!form.birthDate)
+      e.birthDate = "La fecha de nacimiento es obligatoria";
 
-    if (sportsProfile.availabilityDays.length === 0) nextErrors.availabilityDays = "Selecciona al menos un día de disponibilidad";
+    if (!form.gender)
+      e.gender = "Selecciona tu género";
 
-    if (!sportsProfile.semester) nextErrors.semester = "Selecciona tu semestre";
-    if (!sportsProfile.career) nextErrors.career = "Selecciona tu carrera";
+    if (!form.program)
+      e.program = "Selecciona tu programa";
 
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
+    if (requiresSemester(form.relation)) {
+      const sem = Number(form.semester);
+      if (!form.semester)
+        e.semester = "El semestre es obligatorio para estudiantes";
+      else if (!Number.isInteger(sem) || sem < 1 || sem > 10)
+        e.semester = "El semestre debe estar entre 1 y 10";
+    }
 
-  const handleSubmit = (e: React.FormEvent) => {
+    if (!form.identificationType)
+      e.identificationType = "Selecciona el tipo de identificación";
+
+    if (!form.identification.trim())
+      e.identification = "El número de identificación es obligatorio";
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
     if (!validate()) return;
+
     setIsLoading(true);
-    setTimeout(() => { setIsLoading(false); navigate("/dashboard"); }, 2000);
+
+    const payload: RegisterAccountRequestDto = {
+      name:               form.name.trim(),
+      lastName:           form.lastName.trim(),
+      email:              form.email.trim(),
+      password:           form.password,
+      birthDate:          form.birthDate,
+      gender:             form.gender,
+      relation:           form.relation,
+      program:            form.program,
+      semester:           requiresSemester(form.relation) ? Number(form.semester) : 1,
+      identificationType: form.identificationType,
+      identification:     form.identification.trim(),
+    };
+
+    try {
+      await authService.register(payload);
+    } catch (error) {
+      console.log("Error completo:", error);
+      console.log("Es ApiError:", error instanceof ApiError);
+      setErrors(resolveRegisterError(error));
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const session = await login(form.email.trim(), form.password);
+      navigate(resolveDashboardPath(session.roles));
+    } catch {
+      navigate("/login");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-    if (errors[name as keyof typeof errors]) {
+
+    setForm((prev) => ({ ...prev, [name]: value }));
+
+    if (errors[name as keyof FormErrors])
       setErrors((prev) => ({ ...prev, [name]: undefined }));
-    }
-    if (name === "email") {
+
+    if (errors.general)
+      setErrors((prev) => ({ ...prev, general: undefined }));
+
+    if (name === "email")
       setEmailSuggestion(value ? suggestEmail(value) : null);
-    }
+
+    if (name === "relation" && value !== "ESTUDIANTE")
+      setForm((prev) => ({ ...prev, relation: value as RelationValue, semester: "" }));
   };
 
-  const handleSportsProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setSportsProfile((prev) => ({ ...prev, [name]: value }));
-    if (errors[name as keyof typeof errors]) {
-      setErrors((prev) => ({ ...prev, [name]: undefined }));
-    }
-  };
-
-  const handleAvailabilityToggle = (day: string) => {
-    setSportsProfile((prev) => {
-      const exists = prev.availabilityDays.includes(day);
-      return {
-        ...prev,
-        availabilityDays: exists
-          ? prev.availabilityDays.filter((item) => item !== day)
-          : [...prev.availabilityDays, day],
-      };
-    });
-    if (errors.availabilityDays) {
-      setErrors((prev) => ({ ...prev, availabilityDays: undefined }));
-    }
-  };
-
-  const handleProfilePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSportsProfile((prev) => ({ ...prev, profilePhotoName: file.name }));
-  };
 
   const inputBase: React.CSSProperties = {
-    width: "100%",
-    fontSize: "0.92rem",
-    fontWeight: 500,
-    backgroundColor: P.bg,
-    border: "1.5px solid transparent",
-    borderRadius: "14px",
-    outline: "none",
+    width: "100%", fontSize: "0.92rem", fontWeight: 500,
+    backgroundColor: P.bg, border: "1.5px solid transparent",
+    borderRadius: "14px", outline: "none",
     padding: "0.75rem 1rem 0.75rem 2.8rem",
-    color: "#1C1C1E",
+    color: "#1C1C1E", transition: "border-color 0.2s",
+  };
+
+  const inputNoIcon: React.CSSProperties = { ...inputBase, padding: "0.75rem 1rem" };
+
+  const selectStyle: React.CSSProperties = {
+    width: "100%", fontSize: "0.9rem", fontWeight: 500,
+    backgroundColor: P.bg, border: "1.5px solid transparent",
+    borderRadius: "14px", outline: "none",
+    padding: "0.75rem 2.5rem 0.75rem 1rem",
+    color: "#1C1C1E", appearance: "none",
     transition: "border-color 0.2s",
   };
 
-  const selectBase: React.CSSProperties = {
-    fontSize: "0.9rem",
-    fontWeight: 500,
-    backgroundColor: P.bg,
-    border: "1.5px solid rgba(0,0,0,0.08)",
-    color: "#1C1C1E",
-  };
+  const withError = (hasError: boolean): React.CSSProperties => ({
+    borderColor:     hasError ? P.primary : "transparent",
+    backgroundColor: hasError ? "rgba(184,28,28,0.04)" : P.bg,
+  });
+
+  const onFocus = (e: React.FocusEvent<HTMLElement>) =>
+    ((e.target as HTMLElement & { style: CSSStyleDeclaration }).style.borderColor = P.secondary);
+  const onBlur  = (e: React.FocusEvent<HTMLElement>) =>
+    ((e.target as HTMLElement & { style: CSSStyleDeclaration }).style.borderColor = "transparent");
+
+  const fieldErr = (name: keyof FormErrors) =>
+    errors[name]
+      ? <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors[name]}</p>
+      : null;
+
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
 
-      {/* ── Panel Izquierdo ── */}
+      {/* ── Panel izquierdo — branding ── */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
@@ -211,10 +324,9 @@ export function Register() {
           transition={{ duration: 0.6, delay: 0.2 }}
           className="relative z-10"
         >
-          {/* Logo */}
           <div className="flex items-center gap-3 mb-10">
             <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center p-2" style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.15)" }}>
-              <img src={logoTechcup} alt="TECHCUP Logo" className="w-full h-full object-contain" />
+              <img src={logoTechcup} alt="TECHCUP" className="w-full h-full object-contain" />
             </div>
             <div>
               <p className="text-white leading-none" style={{ fontWeight: 800, fontSize: "1.1rem", letterSpacing: "-0.02em" }}>TECHCUP</p>
@@ -226,8 +338,7 @@ export function Register() {
             className="text-white mb-5"
             style={{ fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", fontWeight: 800, lineHeight: 1.15, letterSpacing: "-0.03em" }}
           >
-            Únete a nuestra<br />
-            comunidad y empieza<br />
+            Únete a nuestra<br />comunidad y empieza<br />
             <span style={{ color: P.secondary }}>tu viaje.</span>
           </h2>
 
@@ -240,17 +351,18 @@ export function Register() {
           />
 
           <p className="text-white/55" style={{ fontSize: "0.92rem", fontWeight: 500, lineHeight: 1.65 }}>
-            Accede a eventos, recursos y conecta con profesionales del sector tecnológico
+            Todos los usuarios se registran como jugadores. Los roles de capitán,
+            organizador y árbitro son asignados posteriormente por el administrador.
           </p>
         </motion.div>
       </motion.div>
 
-      {/* ── Panel Derecho ── */}
+      {/* ── Panel derecho — formulario ── */}
       <motion.div
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full md:w-1/2 bg-white flex items-center justify-center p-8 md:p-12 lg:p-16"
+        className="w-full md:w-1/2 bg-white flex items-center justify-center p-8 md:p-12"
       >
         <div className="w-full max-w-md">
           <motion.div
@@ -261,319 +373,257 @@ export function Register() {
             <h2 style={{ fontSize: "clamp(1.7rem, 3vw, 2.2rem)", fontWeight: 800, color: "#1C1C1E", letterSpacing: "-0.03em" }}>
               Crear Cuenta
             </h2>
-            <p className="mt-2 mb-7" style={{ fontSize: "0.9rem", color: "#6E6E73", fontWeight: 500 }}>
-              Completa tus datos para registrarte
+            <p className="mt-2 mb-6" style={{ fontSize: "0.9rem", color: "#6E6E73", fontWeight: 500 }}>
+              Completa tus datos para registrarte como jugador
             </p>
 
-            {/* Ir a login */}
-            <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} className="mb-5">
-              <Link
-                to="/login"
-                className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-2xl transition-all duration-200"
-                style={{
-                  fontSize: "0.9rem",
-                  fontWeight: 600,
-                  color: "#1C1C1E",
-                  backgroundColor: P.bg,
-                  border: "1.5px solid rgba(0,0,0,0.07)",
-                }}
-              >
-                Iniciar sesión
-              </Link>
-            </motion.div>
+            <Link
+              to="/login"
+              className="w-full flex items-center justify-center py-3 px-5 rounded-2xl mb-5 transition-all duration-200"
+              style={{ fontSize: "0.9rem", fontWeight: 600, color: "#1C1C1E", backgroundColor: P.bg, border: "1.5px solid rgba(0,0,0,0.07)" }}
+            >
+              Ya tengo cuenta — Iniciar sesión
+            </Link>
 
-            {/* Divider */}
-            <div className="relative mb-5">
+            <div className="relative mb-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full" style={{ borderTop: "1px solid rgba(0,0,0,0.08)" }} />
               </div>
               <div className="relative flex justify-center">
-                <span className="px-4 bg-white" style={{ fontSize: "0.78rem", color: "#8A8A8E", fontWeight: 500 }}>
-                  O regístrate con email
-                </span>
+                <span className="px-4 bg-white" style={{ fontSize: "0.78rem", color: "#8A8A8E", fontWeight: 500 }}>O regístrate con email</span>
               </div>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-3.5">
-              <div className="pt-1 pb-1">
-                <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1C1C1E", letterSpacing: "0.03em", textTransform: "uppercase" }}>
-                  Datos de registro
-                </p>
+            <form onSubmit={handleSubmit} className="space-y-4">
+
+              {/* Error general */}
+              {errors.general && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+                  className="rounded-2xl p-3"
+                  style={{ backgroundColor: "rgba(184,28,28,0.08)", border: "1px solid rgba(184,28,28,0.18)" }}
+                >
+                  <p style={{ fontSize: "0.82rem", color: P.primary, fontWeight: 600 }}>{errors.general}</p>
+                </motion.div>
+              )}
+
+              {/* ── Datos personales ── */}
+              <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "#8A8A8E", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Datos personales
+              </p>
+
+              {/* Nombre y apellido */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Nombre</label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
+                    <input type="text" name="name" value={form.name} onChange={handleChange} placeholder="Juan"
+                      style={{ ...inputBase, ...withError(!!errors.name) }} onFocus={onFocus} onBlur={onBlur} />
+                  </div>
+                  {fieldErr("name")}
+                </div>
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Apellido</label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
+                    <input type="text" name="lastName" value={form.lastName} onChange={handleChange} placeholder="Pérez"
+                      style={{ ...inputBase, ...withError(!!errors.lastName) }} onFocus={onFocus} onBlur={onBlur} />
+                  </div>
+                  {fieldErr("lastName")}
+                </div>
               </div>
 
-              {/* Name */}
+              {/* Fecha de nacimiento */}
               <div>
-                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Nombre completo</label>
-                <div className="relative">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
-                  <input
-                    type="text" name="name" value={formData.name} onChange={handleChange} required
-                    placeholder="Juan Pérez" style={inputBase}
-                    onFocus={(e) => (e.target.style.borderColor = P.secondary)}
-                    onBlur={(e) => (e.target.style.borderColor = "transparent")}
-                  />
-                </div>
-                {errors.name && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.name}</p>}
+                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Fecha de nacimiento</label>
+                <input type="date" name="birthDate" value={form.birthDate} onChange={handleChange}
+                  max={new Date().toISOString().split("T")[0]}
+                  style={{ ...inputNoIcon, ...withError(!!errors.birthDate) }} onFocus={onFocus} onBlur={onBlur} />
+                {fieldErr("birthDate")}
               </div>
+
+              {/* Género */}
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Género</label>
+                <div className="relative">
+                  <select name="gender" value={form.gender} onChange={handleChange}
+                    style={{ ...selectStyle, ...withError(!!errors.gender) }} onFocus={onFocus} onBlur={onBlur}>
+                    <option value="">Selecciona</option>
+                    {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#6E6E73" }} />
+                </div>
+                {fieldErr("gender")}
+              </div>
+
+              {/* Tipo y número de identificación */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Tipo de ID</label>
+                  <div className="relative">
+                    <select name="identificationType" value={form.identificationType} onChange={handleChange}
+                      style={{ ...selectStyle, ...withError(!!errors.identificationType) }} onFocus={onFocus} onBlur={onBlur}>
+                      <option value="">Tipo</option>
+                      {ID_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#6E6E73" }} />
+                  </div>
+                  {fieldErr("identificationType")}
+                </div>
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Número</label>
+                  <input type="text" name="identification" value={form.identification} onChange={handleChange}
+                    placeholder="1234567890"
+                    style={{ ...inputNoIcon, ...withError(!!errors.identification) }} onFocus={onFocus} onBlur={onBlur} />
+                  {fieldErr("identification")}
+                </div>
+              </div>
+
+              {/* ── Información académica ── */}
+              <p className="pt-2" style={{ fontSize: "0.72rem", fontWeight: 700, color: "#8A8A8E", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Información académica
+              </p>
+
+              {/* Relación */}
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Relación con la institución</label>
+                <div className="relative">
+                  <select name="relation" value={form.relation} onChange={handleChange}
+                    style={{ ...selectStyle, ...withError(!!errors.relation) }} onFocus={onFocus} onBlur={onBlur}>
+                    <option value="">Selecciona</option>
+                    {RELATIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#6E6E73" }} />
+                </div>
+                {fieldErr("relation")}
+                {form.relation === "FAMILIAR" && (
+                  <p className="mt-1" style={{ fontSize: "0.75rem", color: "#6E6E73", fontWeight: 500 }}>
+                    Los familiares deben registrarse con un correo Gmail.
+                  </p>
+                )}
+              </div>
+
+              {/* Programa */}
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Programa académico</label>
+                <div className="relative">
+                  <select name="program" value={form.program} onChange={handleChange}
+                    style={{ ...selectStyle, ...withError(!!errors.program) }} onFocus={onFocus} onBlur={onBlur}>
+                    <option value="">Selecciona tu programa</option>
+                    {PROGRAMS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#6E6E73" }} />
+                </div>
+                {fieldErr("program")}
+              </div>
+
+              {/* Semestre — solo ESTUDIANTE */}
+              {requiresSemester(form.relation) && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Semestre actual</label>
+                  <div className="relative">
+                    <select name="semester" value={form.semester} onChange={handleChange}
+                      style={{ ...selectStyle, ...withError(!!errors.semester) }} onFocus={onFocus} onBlur={onBlur}>
+                      <option value="">Selecciona semestre</option>
+                      {Array.from({ length: 10 }, (_, i) => (
+                        <option key={i + 1} value={String(i + 1)}>{i + 1}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: "#6E6E73" }} />
+                  </div>
+                  {fieldErr("semester")}
+                </motion.div>
+              )}
+
+              {/* ── Datos de acceso ── */}
+              <p className="pt-2" style={{ fontSize: "0.72rem", fontWeight: 700, color: "#8A8A8E", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                Datos de acceso
+              </p>
 
               {/* Email */}
               <div>
                 <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Correo electrónico</label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
-                  <input
-                    type="email" name="email" value={formData.email} onChange={handleChange} required
-                    placeholder="tu@email.com" style={inputBase}
-                    onFocus={(e) => (e.target.style.borderColor = P.secondary)}
-                    onBlur={(e) => (e.target.style.borderColor = "transparent")}
-                  />
+                  <input type="email" name="email" value={form.email} onChange={handleChange}
+                    placeholder={form.relation === "FAMILIAR" ? "tu@gmail.com" : "tu@escuelacolombia.edu.co"}
+                    style={{ ...inputBase, ...withError(!!errors.email) }} onFocus={onFocus} onBlur={onBlur} />
                 </div>
-                {errors.email && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.email}</p>}
+                {fieldErr("email")}
                 {!errors.email && emailSuggestion && (
                   <p className="mt-1" style={{ fontSize: "0.75rem", color: "#0066FE", fontWeight: 600 }}>
-                    ¿Quisiste decir <button type="button" onClick={() => setFormData((prev) => ({ ...prev, email: emailSuggestion }))} style={{ textDecoration: "underline" }}>{emailSuggestion}</button>?
+                    ¿Quisiste decir{" "}
+                    <button type="button" onClick={() => setForm((prev) => ({ ...prev, email: emailSuggestion }))} style={{ textDecoration: "underline" }}>
+                      {emailSuggestion}
+                    </button>?
                   </p>
                 )}
               </div>
 
-              {/* Password */}
+              {/* Contraseña */}
               <div>
                 <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Contraseña</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="password" value={formData.password} onChange={handleChange} required
-                    placeholder="••••••••" style={{ ...inputBase, paddingRight: "3rem" }}
-                    onKeyUp={(e) => setCapsLockPassword(e.getModifierState("CapsLock"))}
-                    onFocus={(e) => (e.target.style.borderColor = P.secondary)}
-                    onBlur={(e) => (e.target.style.borderColor = "transparent")}
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3.5 top-1/2 -translate-y-1/2" style={{ color: "#6E6E73" }}>
+                  <input type={showPassword ? "text" : "password"} name="password" value={form.password} onChange={handleChange}
+                    placeholder="••••••••"
+                    onKeyUp={(e) => setCapsLockPass(e.getModifierState("CapsLock"))}
+                    style={{ ...inputBase, paddingRight: "3rem", ...withError(!!errors.password) }} onFocus={onFocus} onBlur={onBlur} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2" style={{ color: "#6E6E73" }}>
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                {capsLockPassword && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.secondary, fontWeight: 600 }}>Bloq Mayús está activado</p>}
-                {errors.password && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.password}</p>}
+                {capsLockPass && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.secondary, fontWeight: 600 }}>Bloq Mayús está activado</p>}
+                {fieldErr("password")}
               </div>
 
-              {/* Confirm Password */}
+              {/* Confirmar contraseña */}
               <div>
                 <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Confirmar contraseña</label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
-                  <input
-                    type={showConfirm ? "text" : "password"}
-                    name="confirmPassword" value={formData.confirmPassword} onChange={handleChange} required
-                    placeholder="••••••••" style={{ ...inputBase, paddingRight: "3rem" }}
-                    onKeyUp={(e) => setCapsLockConfirm(e.getModifierState("CapsLock"))}
-                    onFocus={(e) => (e.target.style.borderColor = P.secondary)}
-                    onBlur={(e) => (e.target.style.borderColor = "transparent")}
-                  />
-                  <button type="button" onClick={() => setShowConfirm(!showConfirm)} className="absolute right-3.5 top-1/2 -translate-y-1/2" style={{ color: "#6E6E73" }}>
+                  <input type={showConfirm ? "text" : "password"} name="confirmPassword" value={form.confirmPassword} onChange={handleChange}
+                    placeholder="••••••••"
+                    onKeyUp={(e) => setCapsLockConf(e.getModifierState("CapsLock"))}
+                    style={{ ...inputBase, paddingRight: "3rem", ...withError(!!errors.confirmPassword) }} onFocus={onFocus} onBlur={onBlur} />
+                  <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2" style={{ color: "#6E6E73" }}>
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                {capsLockConfirm && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.secondary, fontWeight: 600 }}>Bloq Mayús está activado</p>}
-                {errors.confirmPassword && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.confirmPassword}</p>}
+                {capsLockConf && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.secondary, fontWeight: 600 }}>Bloq Mayús está activado</p>}
+                {fieldErr("confirmPassword")}
               </div>
 
-              <div className="pt-2 pb-1">
-                <p style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1C1C1E", letterSpacing: "0.03em", textTransform: "uppercase" }}>
-                  Información académica
-                </p>
-              </div>
-
-              <div>
-                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Semestre</label>
-                <select
-                  name="semester"
-                  value={sportsProfile.semester}
-                  onChange={handleSportsProfileChange}
-                  className="w-full rounded-2xl px-4 py-3"
-                  style={selectBase}
-                >
-                  <option value="">Selecciona semestre</option>
-                  {Array.from({ length: 8 }, (_, idx) => {
-                    const semester = String(idx + 1);
-                    return (
-                      <option key={semester} value={semester}>
-                        {semester}
-                      </option>
-                    );
-                  })}
-                </select>
-                {errors.semester && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.semester}</p>}
-              </div>
-
-              <div>
-                <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Carrera</label>
-                <select
-                  name="career"
-                  value={sportsProfile.career}
-                  onChange={handleSportsProfileChange}
-                  className="w-full rounded-2xl px-4 py-3"
-                  style={selectBase}
-                >
-                  <option value="">Selecciona carrera</option>
-                  {careerOptions.map((career) => (
-                    <option key={career} value={career}>
-                      {career}
-                    </option>
-                  ))}
-                </select>
-                {errors.career && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.career}</p>}
-              </div>
-
-              {!showSportsProfileSetup ? (
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.02, y: -1 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowSportsProfileSetup(true)}
-                  className="w-full text-white flex items-center justify-center gap-2 mt-2"
-                  style={{
-                    backgroundColor: P.primary,
-                    fontWeight: 700,
-                    fontSize: "0.92rem",
-                    padding: "0.9rem 1.5rem",
-                    borderRadius: "14px",
-                    boxShadow: "0 6px 24px rgba(184,28,28,0.28)",
-                  }}
-                >
-                  <Trophy className="w-4 h-4" />
-                  Configurar perfil deportivo
-                </motion.button>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="mt-3 rounded-2xl p-4"
-                  style={{ backgroundColor: P.bg, border: "1px solid rgba(0,0,0,0.06)" }}
-                >
-                  <p className="mb-3" style={{ fontSize: "0.8rem", fontWeight: 700, color: "#1C1C1E", letterSpacing: "0.03em", textTransform: "uppercase" }}>
-                    Perfil deportivo
-                  </p>
-
-                  <div className="space-y-3.5">
-                    <div>
-                      <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Foto de perfil</label>
-                      <label
-                        className="w-full flex items-center justify-between rounded-2xl px-4 py-3 cursor-pointer"
-                        style={{ backgroundColor: "white", border: "1.5px dashed rgba(0,0,0,0.15)" }}
-                      >
-                        <span style={{ fontSize: "0.84rem", color: sportsProfile.profilePhotoName ? "#1C1C1E" : "#6E6E73", fontWeight: 500 }}>
-                          {sportsProfile.profilePhotoName || "Subir foto de perfil"}
-                        </span>
-                        <Upload className="w-4 h-4" style={{ color: "#6E6E73" }} />
-                        <input type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoUpload} />
-                      </label>
-                    </div>
-
-                    <div>
-                      <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Posición de juego</label>
-                      <select
-                        name="preferredPosition"
-                        value={sportsProfile.preferredPosition}
-                        onChange={handleSportsProfileChange}
-                        className="w-full rounded-2xl px-4 py-3"
-                        style={{ fontSize: "0.9rem", fontWeight: 500, backgroundColor: "white", border: "1.5px solid rgba(0,0,0,0.08)", color: "#1C1C1E" }}
-                      >
-                        <option value="">Selecciona una posición</option>
-                        <option value="Portero">Portero</option>
-                        <option value="Defensa">Defensa</option>
-                        <option value="Mediocampista">Mediocampista</option>
-                        <option value="Delantero">Delantero</option>
-                      </select>
-                      {errors.preferredPosition && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.preferredPosition}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block mb-1.5" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Número de camisa favorito</label>
-                      <div className="relative">
-                        <Shirt className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
-                        <input
-                          type="number"
-                          min={0}
-                          max={99}
-                          name="favoriteJerseyNumber"
-                          value={sportsProfile.favoriteJerseyNumber}
-                          onChange={handleSportsProfileChange}
-                          placeholder="Ej: 10"
-                          style={inputBase}
-                        />
-                      </div>
-                      {errors.favoriteJerseyNumber && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.favoriteJerseyNumber}</p>}
-                    </div>
-
-                    <div>
-                      <label className="block mb-2" style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>
-                        <CalendarDays className="inline w-4 h-4 mr-1" />
-                        Disponibilidad de días (Lunes a Sábado)
-                      </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {weekDays.map((day) => {
-                          const selected = sportsProfile.availabilityDays.includes(day);
-                          return (
-                            <button
-                              key={day}
-                              type="button"
-                              onClick={() => handleAvailabilityToggle(day)}
-                              className="rounded-xl px-3 py-2 text-sm"
-                              style={{
-                                border: `1.5px solid ${selected ? `${P.secondary}60` : "rgba(0,0,0,0.08)"}`,
-                                backgroundColor: selected ? `${P.secondary}14` : "white",
-                                color: selected ? P.secondary : "#1C1C1E",
-                                fontWeight: 700,
-                              }}
-                            >
-                              {day}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {errors.availabilityDays && <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors.availabilityDays}</p>}
-                    </div>
-
-                    <motion.button
-                      type="submit"
-                      disabled={isLoading}
-                      whileHover={{ scale: 1.02, y: -1 }}
-                      whileTap={{ scale: 0.98 }}
-                      className="w-full text-white flex items-center justify-center mt-2"
-                      style={{
-                        backgroundColor: P.primary,
-                        fontWeight: 700,
-                        fontSize: "0.92rem",
-                        padding: "0.9rem 1.5rem",
-                        borderRadius: "14px",
-                        boxShadow: "0 6px 24px rgba(184,28,28,0.28)",
-                        opacity: isLoading ? 0.75 : 1,
-                      }}
-                    >
-                      {isLoading ? (
-                        <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                      ) : "Crear perfil"}
-                    </motion.button>
-                  </div>
-                </motion.div>
-              )}
+              {/* Submit */}
+              <motion.button
+                type="submit" disabled={isLoading}
+                whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.98 }}
+                className="w-full text-white flex items-center justify-center gap-2 mt-2"
+                style={{ backgroundColor: P.primary, fontWeight: 700, fontSize: "0.92rem", padding: "0.9rem 1.5rem", borderRadius: "14px", boxShadow: "0 6px 24px rgba(184,28,28,0.28)", opacity: isLoading ? 0.75 : 1 }}
+              >
+                {isLoading
+                  ? <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} className="w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
+                  : "Crear cuenta"}
+              </motion.button>
             </form>
 
-            {/* Privacy note */}
+            {/* Nota de privacidad */}
             <div className="mt-5 flex items-start gap-3 p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
               <Shield className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: P.primary }} />
               <p style={{ fontSize: "0.78rem", color: "#6E6E73", fontWeight: 500, lineHeight: 1.55 }}>
-                Al registrarte, aceptas nuestros términos y condiciones. Tu información está protegida y nunca será compartida.
+                Al registrarte aceptas nuestros términos y condiciones. Tu información
+                está protegida y nunca será compartida con terceros.
               </p>
             </div>
 
-            <p className="mt-6 text-center" style={{ fontSize: "0.88rem", color: "#6E6E73" }}>
-              ¿Ya tienes cuenta?{" "}
-              <Link to="/login" style={{ color: P.primary, fontWeight: 700 }}>Inicia sesión aquí</Link>
-            </p>
-            <p className="mt-4 text-center">
+            <p className="mt-6 text-center">
               <Link to="/" style={{ fontSize: "0.82rem", color: "#8A8A8E", fontWeight: 500 }}>← Volver al inicio</Link>
             </p>
           </motion.div>
@@ -582,6 +632,3 @@ export function Register() {
     </div>
   );
 }
-
-
-
