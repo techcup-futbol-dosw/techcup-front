@@ -15,6 +15,7 @@ import { MatchDetail } from "@/modules/teams/pages/MatchDetail";
 import { TeamPrePaymentSetup } from "@/modules/teams/pages/TeamPrePaymentSetup";
 import { Events } from "@/modules/competition/pages/Events";
 import { Profile } from "@/modules/users/pages/Profile";
+import { UserManagement } from "@/modules/admin/pages/UserManagement";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "organizer/payment-report", Component: PaymentReport },
       { path: "organizer/tournaments", Component: ManageTournaments },
       { path: "organizer/tournaments/:id", Component: TournamentDetail },
+      { path: "dashboard-admin", Component: UserManagement },
       { path: "events", Component: Events },
       { path: "profile", Component: Profile },
       { path: "matches", Component: Matches },

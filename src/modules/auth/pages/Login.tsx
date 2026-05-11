@@ -95,7 +95,7 @@ export function Login() {
     const normalizedRoles = (roles ?? []).map((role) => role.toUpperCase());
 
     if (normalizedRoles.includes("ADMIN")) {
-      return "/dashboard-organizer";
+      return "/dashboard-admin";
     }
 
     if (normalizedRoles.includes("ORGANIZER")) {
