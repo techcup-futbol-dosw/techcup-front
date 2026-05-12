@@ -222,7 +222,7 @@ export function Register() {
       gender:             form.gender,
       relation:           form.relation,
       program:            form.program,
-      semester:           requiresSemester(form.relation) ? Number(form.semester) : 1,
+      semester:           requiresSemester(form.relation) ? Number(form.semester) : null,
       identificationType: form.identificationType,
       identification:     form.identification.trim(),
     };
