@@ -4,7 +4,7 @@
  */
 import { createBrowserRouter } from "react-router";
 import { LandingPage } from "@/modules/auth/pages/LandingPage";
-import { Dashboard } from "@/modules/competition/pages/Dashboard";
+import Dashboard from "@/modules/users/pages/Dashboard";
 import { ArbitroDashboard } from "@/modules/teams/pages/ArbitroDashboard";
 import { OrganizerDashboard } from "@/modules/tournament/pages/OrganizerDashboard";
 import { CreateTournament } from "@/modules/tournament/pages/CreateTournament";
@@ -16,6 +16,8 @@ import { TeamPrePaymentSetup } from "@/modules/teams/pages/TeamPrePaymentSetup";
 import { Events } from "@/modules/competition/pages/Events";
 import { Profile } from "@/modules/users/pages/Profile";
 import { UserManagement } from "@/modules/admin/pages/UserManagement";
+import { SportsProfile } from "@/modules/users/pages/SportsProfile";
+import  PlayerSearch  from "@/modules/users/pages/PlayerSearch";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -39,7 +41,7 @@ export const router = createBrowserRouter([
     Component: RootLayout,
     children: [
       { index: true, Component: LandingPage },
-      { path: "dashboard", Component: Dashboard },
+      { path: "dashboard-player", Component: Dashboard },
       { path: "dashboard-arbitro", Component: ArbitroDashboard },
       { path: "dashboard-arbitro/partido/:id", Component: MatchDetail },
       { path: "dashboard/team-setup", Component: TeamPrePaymentSetup },
@@ -57,7 +59,9 @@ export const router = createBrowserRouter([
         ),
       },
       { path: "events", Component: Events },
+      { path: "sport-profile", Component: SportsProfile },
       { path: "profile", Component: Profile },
+      { path: "player-search", Component: PlayerSearch },
       { path: "matches", Component: Matches },
       { path: "schedule", Component: Schedule },
       { path: "scores", Component: Scores },
@@ -65,5 +69,3 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
-
-
