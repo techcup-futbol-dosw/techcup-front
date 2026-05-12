@@ -55,7 +55,7 @@ export const router = createBrowserRouter([
       { path: "profile", Component: Profile },
       { path: "player-search", Component: PlayerSearch },
       { path: "pending-invitations", Component: PendingInvitations },
-      { path: "audit", Component: Audit },
+      { path: "audit-players", Component: Audit },
       { path: "matches", Component: Matches },
       { path: "schedule", Component: Schedule },
       { path: "scores", Component: Scores },
