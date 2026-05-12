@@ -1,6 +1,7 @@
 ﻿// src/modules/users/pages/Dashboard.tsx
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
+import { Search } from "lucide-react";
 
 type Screen = "invitaciones" | "perfil" | "buscar" | "admin" | "crear-equipo";
 
@@ -23,29 +24,29 @@ export default function Dashboard({ onNavigate }: Readonly<HomeProps>) {
   const toastRef = useRef<HTMLDivElement | null>(null);
 
   const handleNavigate = (screen: Screen) => {
-    // Permitir control externo (control y libertad)
-    if (onNavigate) {
-      onNavigate(screen);
-      setFeedback(null);
-      return;
-    }
+  // Permitir control externo (control y libertad)
+  if (onNavigate) {
+    onNavigate(screen);
+    setFeedback(null);
+    return;
+  }
 
-    const map: Record<Screen, string> = {
-      invitaciones: "/invitaciones",
-      perfil: "/profile",
-      buscar: "/buscar",
-      admin: "/dashboard",
-      "crear-equipo": "/dashboard/team-setup",
-    };
-
-    const path = map[screen] ?? "/";
-
-    // Visibilidad del estado: feedback breve antes de navegar (mejora UX reading)
-    setFeedback(getFeedbackMessage(screen));
-
-    // Delay muy corto para que el usuario perciba el mensaje (Doherty)
-    globalThis.setTimeout(() => navigate(path), 140);
+  const map: Record<Screen, string> = {
+    invitaciones: "/invitaciones",
+    perfil: "/profile",
+    buscar: "/player-search", // <- cambio aquí
+    admin: "/dashboard-player",
+    "crear-equipo": "/dashboard/team-setup",
   };
+
+  const path = map[screen] ?? "/";
+
+  // Visibilidad del estado: feedback breve antes de navegar (mejora UX reading)
+  setFeedback(getFeedbackMessage(screen));
+
+  // Delay muy corto para que el usuario perciba el mensaje (Doherty)
+  globalThis.setTimeout(() => navigate(path), 140);
+};
 
   // Atajo "/" para navegacion rapida a Buscar (convencion y mejora de eficiencia)
   useEffect(() => {
@@ -94,6 +95,15 @@ export default function Dashboard({ onNavigate }: Readonly<HomeProps>) {
             >
               Mantente al tanto de los partidos, tablas de posiciones y toda la informacion del torneo desde aqui
             </p>
+            <button
+              type="button"
+              onClick={() => handleNavigate("buscar")}
+              className="mt-6 bg-white hover:bg-gray-100 text-[#4a9eff] px-6 py-3 rounded-[12px] font-['DM_Sans:SemiBold',sans-serif] font-semibold text-[15px] transition-all flex items-center gap-2 shadow-lg"
+              style={{ fontVariationSettings: "'opsz' 14" }}
+            >
+              <Search style={{ width: 18, height: 18 }} />
+              Buscar Jugadores
+            </button>
           </div>
         </div>
 
