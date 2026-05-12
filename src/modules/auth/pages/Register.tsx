@@ -16,6 +16,7 @@ const P = {
   bg: "#F2F2F7",
 };
 
+
 const RELATIONS = [
   { value: "ESTUDIANTE",     label: "Estudiante" },
   { value: "GRADUADO",       label: "Graduado" },
@@ -73,6 +74,7 @@ type FormData = {
 
 type FormErrors = Partial<Record<keyof FormData | "general", string>>;
 
+
 const INSTITUTIONAL_REGEX = /\.edu(\.[a-z]{2})?$/i;
 const GMAIL_REGEX = /^[^\s@]+@gmail\.com$/i;
 
@@ -111,6 +113,7 @@ function resolveRegisterError(error: unknown): FormErrors {
   return { general: "No fue posible crear la cuenta. Inténtalo de nuevo." };
 }
 
+
 export function Register() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -129,6 +132,7 @@ export function Register() {
     semester: "", identificationType: "", identification: "",
   });
 
+
   const resolveDashboardPath = (roles: string[] | undefined): string => {
     const normalizedRoles = (roles ?? []).map((role) => role.toUpperCase());
     if (normalizedRoles.includes("ADMIN"))     return "/dashboard-admin";
@@ -136,6 +140,7 @@ export function Register() {
     if (normalizedRoles.includes("REFEREE"))   return "/dashboard-arbitro";
     return "/dashboard";
   };
+
 
   function validate(): boolean {
     const e: FormErrors = {};
@@ -217,7 +222,7 @@ export function Register() {
       gender:             form.gender,
       relation:           form.relation,
       program:            form.program,
-      semester:           requiresSemester(form.relation) ? Number(form.semester) : null,
+      semester:           requiresSemester(form.relation) ? Number(form.semester) : 1,
       identificationType: form.identificationType,
       identification:     form.identification.trim(),
     };
@@ -225,6 +230,8 @@ export function Register() {
     try {
       await authService.register(payload);
     } catch (error) {
+      console.log("Error completo:", error);
+      console.log("Es ApiError:", error instanceof ApiError);
       setErrors(resolveRegisterError(error));
       setIsLoading(false);
       return;
@@ -257,6 +264,7 @@ export function Register() {
     if (name === "relation" && value !== "ESTUDIANTE")
       setForm((prev) => ({ ...prev, relation: value as RelationValue, semester: "" }));
   };
+
 
   const inputBase: React.CSSProperties = {
     width: "100%", fontSize: "0.92rem", fontWeight: 500,
@@ -292,13 +300,16 @@ export function Register() {
       ? <p className="mt-1" style={{ fontSize: "0.75rem", color: P.primary, fontWeight: 600 }}>{errors[name]}</p>
       : null;
 
+
   return (
-    <div className="min-h-screen flex flex-col md:flex-row md:h-screen md:overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row">
+
+      {/* ── Panel izquierdo — branding ── */}
       <motion.div
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full md:w-1/2 relative overflow-hidden flex flex-col justify-center p-8 md:p-12 lg:p-16 min-h-[42vh] md:h-screen md:flex-shrink-0"
+        className="w-full md:w-1/2 md:sticky md:top-0 md:h-screen relative overflow-hidden flex flex-col justify-center p-8 md:p-12 lg:p-16 min-h-[42vh]"
         style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}
       >
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -352,9 +363,9 @@ export function Register() {
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
-        className="w-full md:w-1/2 bg-white flex items-start justify-center p-8 md:p-12 md:h-screen md:overflow-y-auto"
+        className="w-full md:w-1/2 bg-white flex items-center justify-center p-8 md:p-12"
       >
-        <div className="w-full max-w-md py-8">
+        <div className="w-full max-w-md">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -541,7 +552,7 @@ export function Register() {
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
                   <input type="email" name="email" value={form.email} onChange={handleChange}
-                    placeholder={form.relation === "FAMILIAR" ? "tu@gmail.com" : "tu@escuelacolombia.edu.co"}
+                    placeholder={form.relation === "FAMILIAR" ? "tu@gmail.com" : "tu@escuelaing.edu.co"}
                     style={{ ...inputBase, ...withError(!!errors.email) }} onFocus={onFocus} onBlur={onBlur} />
                 </div>
                 {fieldErr("email")}
