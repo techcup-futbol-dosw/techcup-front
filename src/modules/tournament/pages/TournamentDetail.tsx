@@ -5,8 +5,9 @@
  */
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate, useParams } from "react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import logoTechcup from "@/assets/logo.png";
+import { tournamentService, type TournamentTeamDto, type TournamentMatchDto, type StandingDto } from "../services/tournamentService";
 import {
   User,
   LogOut,
@@ -38,40 +39,10 @@ const P = {
   bg:          "#F2F2F7",
 };
 
-// ── Interfaces ────────────────────────────────────
-interface Team {
-  id: number;
-  name: string;
-  players: number;
-  status: "active" | "eliminated";
-  eliminatedDate?: string;
-}
-
-interface Match {
-  id: number;
-  date: string;
-  time: string;
-  court: string;
-  teamA: string;
-  teamB: string;
-  scoreA?: number;
-  scoreB?: number;
-  scorers?:     Array<{ player: string; team: string; minute: string }>;
-  yellowCards?: Array<{ player: string; team: string; minute: string }>;
-  redCards?:    Array<{ player: string; team: string; minute: string }>;
-  status: "pending" | "in-progress" | "completed";
-}
-
-interface Standing {
-  team: string;
-  pj: number;
-  g:  number;
-  e:  number;
-  p:  number;
-  gf: number;
-  gc: number;
-  pts: number;
-}
+// ── Tipos — reutilizados del servicio ─────────────
+type Team    = TournamentTeamDto;
+type Match   = TournamentMatchDto;
+type Standing = StandingDto;
 
 interface BracketTeam {
   name: string;
@@ -90,55 +61,6 @@ interface BracketRound {
   matches: BracketMatch[];
 }
 
-// ── Mock data ─────────────────────────────────────
-const mockTeams: Team[] = [
-  { id: 1, name: "Los Tigres FC",   players: 7, status: "active" },
-  { id: 2, name: "Relámpagos",      players: 7, status: "active" },
-  { id: 3, name: "Dragones Rojos",  players: 7, status: "active" },
-  { id: 4, name: "Águilas Doradas", players: 7, status: "active" },
-  { id: 5, name: "Titanes",         players: 7, status: "eliminated", eliminatedDate: "2026-03-05" },
-  { id: 6, name: "Leones FC",       players: 7, status: "eliminated", eliminatedDate: "2026-03-04" },
-];
-
-const mockMatches: Match[] = [
-  {
-    id: 1, date: "2026-03-10", time: "14:00", court: "Cancha Principal",
-    teamA: "Los Tigres FC", teamB: "Relámpagos", scoreA: 3, scoreB: 2,
-    scorers: [
-      { player: "Juan Pérez",   team: "Los Tigres FC", minute: "11'" },
-      { player: "Luis Díaz",    team: "Relámpagos",    minute: "23'" },
-      { player: "Mateo Silva",  team: "Los Tigres FC", minute: "46'" },
-      { player: "Carlos Rivas", team: "Relámpagos",    minute: "58'" },
-      { player: "Andrés Gil",   team: "Los Tigres FC", minute: "74'" },
-    ],
-    yellowCards: [
-      { player: "Sergio Mora", team: "Relámpagos",    minute: "34'" },
-      { player: "David Luna",  team: "Los Tigres FC", minute: "67'" },
-    ],
-    redCards: [{ player: "Felipe Rojas", team: "Relámpagos", minute: "82'" }],
-    status: "completed",
-  },
-  {
-    id: 2, date: "2026-03-10", time: "16:00", court: "Cancha Secundaria",
-    teamA: "Dragones Rojos", teamB: "Águilas Doradas", scoreA: 1, scoreB: 1,
-    scorers: [
-      { player: "Miguel Soto",  team: "Dragones Rojos",  minute: "18'" },
-      { player: "Daniel Ariza", team: "Águilas Doradas", minute: "52'" },
-    ],
-    yellowCards: [{ player: "Julio Peña", team: "Dragones Rojos", minute: "40'" }],
-    redCards: [],
-    status: "in-progress",
-  },
-  { id: 3, date: "2026-03-12", time: "14:00", court: "Cancha Principal",  teamA: "Los Tigres FC",  teamB: "Dragones Rojos",  status: "pending" },
-  { id: 4, date: "2026-03-12", time: "16:00", court: "Cancha Secundaria", teamA: "Relámpagos",     teamB: "Águilas Doradas", status: "pending" },
-];
-
-const mockStandings: Standing[] = [
-  { team: "Los Tigres FC",   pj: 1, g: 1, e: 0, p: 0, gf: 3, gc: 2, pts: 3 },
-  { team: "Águilas Doradas", pj: 1, g: 0, e: 1, p: 0, gf: 1, gc: 1, pts: 1 },
-  { team: "Dragones Rojos",  pj: 1, g: 0, e: 1, p: 0, gf: 1, gc: 1, pts: 1 },
-  { team: "Relámpagos",      pj: 1, g: 0, e: 0, p: 1, gf: 2, gc: 3, pts: 0 },
-];
 
 const mockBracket: BracketRound[] = [
   {
@@ -176,17 +98,30 @@ const matchStatusLabel = (s: Match["status"]) =>
 // TournamentDetail
 
 export function TournamentDetail() {
-  useParams();
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   // ── UI state ──
   const [showLogout,      setShowLogout]      = useState(false);
   const [activeTab,       setActiveTab]       = useState<"matches" | "teams" | "eliminated">("matches");
+  const [loadingData,     setLoadingData]     = useState(true);
 
   // ── Data state ──
-  const [teams]     = useState<Team[]>(mockTeams);
-  const [matches,    setMatches]    = useState<Match[]>(mockMatches);
-  const [standings]              = useState<Standing[]>(mockStandings);
+  const [teams,     setTeams]     = useState<Team[]>([]);
+  const [matches,   setMatches]   = useState<Match[]>([]);
+  const [standings, setStandings] = useState<Standing[]>([]);
+
+  useEffect(() => {
+    if (!id) return;
+    tournamentService.getById(Number(id))
+      .then((detail) => {
+        setTeams(detail.teams ?? []);
+        setMatches(detail.matches ?? []);
+        setStandings(detail.standings ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingData(false));
+  }, [id]);
 
   // ── Match detail modal ──
   const [selectedMatch,   setSelectedMatch]   = useState<Match | null>(null);
@@ -233,9 +168,12 @@ export function TournamentDetail() {
     setShowEditMatch(true);
   };
 
-  const handleSaveMatch = () => {
+  const handleSaveMatch = async () => {
     if (!editForm) return;
-    setMatches((prev) => prev.map((m) => (m.id === editForm.id ? editForm : m)));
+    try {
+      const updated = await tournamentService.updateMatch(editForm.id, editForm);
+      setMatches((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+    } catch { alert("Error al guardar el partido."); }
     setShowEditMatch(false);
     setEditForm(null);
   };
@@ -245,7 +183,7 @@ export function TournamentDetail() {
     setShowCreateMatch(true);
   };
 
-  const handleSaveNewMatch = () => {
+  const handleSaveNewMatch = async () => {
     if (!createForm.date || !createForm.time || !createForm.court || !createForm.teamA || !createForm.teamB) {
       alert("Por favor completa todos los campos");
       return;
@@ -254,18 +192,16 @@ export function TournamentDetail() {
       alert("Los equipos deben ser diferentes");
       return;
     }
-    setMatches((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        date:   createForm.date!,
-        time:   createForm.time!,
-        court:  createForm.court!,
-        teamA:  createForm.teamA!,
-        teamB:  createForm.teamB!,
-        status: "pending",
-      },
-    ]);
+    try {
+      const created = await tournamentService.createMatch(Number(id), {
+        date:    createForm.date!,
+        time:    createForm.time!,
+        courtId: 0,
+        teamAId: 0,
+        teamBId: 0,
+      });
+      setMatches((prev) => [...prev, created]);
+    } catch { alert("Error al crear el partido."); }
     setShowCreateMatch(false);
   };
 
@@ -292,8 +228,14 @@ export function TournamentDetail() {
   };
 
   
-  // RENDER
-  
+  if (loadingData) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: P.bg }}>
+        <p style={{ color: P.default, fontSize: "0.9rem", fontWeight: 500 }}>Cargando torneo...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pb-28 lg:pb-0" style={{ backgroundColor: P.bg }}>
 

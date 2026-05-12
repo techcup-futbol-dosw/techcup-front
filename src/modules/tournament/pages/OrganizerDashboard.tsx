@@ -4,6 +4,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useEffect } from "react";
+import { tournamentService } from "@/modules/tournament/services/tournamentService";
 import logoTechcup from "@/assets/logo.png";
 import {
   User,
@@ -210,20 +211,30 @@ export function OrganizerDashboard() {
   const [showLogout, setShowLogout] = useState(false);
   const [torneoVigente, setTorneoVigente] = useState<TorneoVigente | null>(null);
 
-  // TODO: reemplazar por llamada real al API
   useEffect(() => {
-    // Simulación — conectar al endpoint GET /api/tournaments/active
-    setTorneoVigente({
-      nombre: "TECHCUP Fútbol 2026-I",
-      estado: "En Progreso",
-      fechaInicio: "15 Ene 2026",
-      fechaCierreInscripciones: "10 Ene 2026",
-      costo: 35000,
-      equiposInscritos: 8,
-      partidosJugados: 12,
-      pagosEnRevision: 3,
-      partidosHoy: 2,
-    });
+    tournamentService.list()
+      .then((list) => {
+        const active = list.find((t) => t.status === "in_progress" || t.status === "active") ?? list[0] ?? null;
+        if (!active) return;
+        const estadoMap: Record<string, string> = {
+          draft:       "Borrador",
+          active:      "Activo",
+          in_progress: "En Progreso",
+          finished:    "Finalizado",
+        };
+        setTorneoVigente({
+          nombre:                   active.name,
+          estado:                   estadoMap[active.status] ?? "Activo",
+          fechaInicio:              active.startDate,
+          fechaCierreInscripciones: active.registrationCloseDate,
+          costo:                    active.costPerTeam,
+          equiposInscritos:         active.approvedTeams,
+          partidosJugados:          0,
+          pagosEnRevision:          0,
+          partidosHoy:              0,
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const handleLogout = () => {

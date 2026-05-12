@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import logoTechcup from "@/assets/logo.png";
-import { readUICache, writeUICache } from "@/core/utils/uiCache";
+import { tournamentService, type TournamentDto } from "../services/tournamentService";
 import {
   User,
   LogOut,
@@ -38,51 +38,10 @@ const P = {
   bg: "#F2F2F7",
 };
 
-// ── Types ─────────────────────────────────────────
-type TournamentStatus = "draft" | "active" | "in_progress" | "finished";
-
-interface Court {
-  id: number;
-  name: string;
-  description: string;
-}
-
-interface Tournament {
-  id: number;
-  name: string;
-  status: TournamentStatus;
-  startDate: string;
-  endDate: string;
-  registrationCloseDate: string;
-  maxTeams: number;
-  costPerTeam: number;
-  courts: Court[];
-  regulationFileName?: string;
-  /** Equipos con inscripción aprobada */
-  approvedTeams: number;
-  totalRevenue: number;
-}
-
-// ── Mock data ─────────────────────────────────────
-const mockTournaments: Tournament[] = [
-  {
-    id: 1,
-    name: "TECHCUP 2026-1",
-    status: "draft",
-    startDate: "2026-06-01",
-    endDate: "2026-06-30",
-    registrationCloseDate: "2026-05-25",
-    maxTeams: 16,
-    costPerTeam: 50000,
-    courts: [
-      { id: 1, name: "Cancha Norte", description: "Junto al edificio K" },
-      { id: 2, name: "Cancha Sur", description: "Zona deportiva bloque A" },
-    ],
-    regulationFileName: "reglamento_techcup_2026_1.pdf",
-    approvedTeams: 0,
-    totalRevenue: 0,
-  },
-];
+// ── Types — se reusan los del servicio ────────────
+type TournamentStatus = TournamentDto["status"];
+type Court = TournamentDto["courts"][number];
+type Tournament = TournamentDto;
 
 // ── Helpers ───────────────────────────────────────
 const today = () => new Date().toISOString().split("T")[0];
@@ -131,9 +90,8 @@ const STATUS_ORDER: TournamentStatus[] = ["draft", "active", "in_progress", "fin
 export function ManageTournaments() {
   const navigate = useNavigate();
   const [showLogout, setShowLogout] = useState(false);
-  const [tournaments, setTournaments] = useState<Tournament[]>(() =>
-    readUICache<Tournament[]>("techcup.ui.tournaments.v2", mockTournaments)
-  );
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<Tournament | null>(null);
   const [originalEditForm, setOriginalEditForm] = useState<Tournament | null>(null);
@@ -141,43 +99,55 @@ export function ManageTournaments() {
   const [pendingRegFile, setPendingRegFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    writeUICache("techcup.ui.tournaments.v2", tournaments);
-  }, [tournaments]);
+  const fetchTournaments = () => {
+    setLoading(true);
+    tournamentService.list()
+      .then(setTournaments)
+      .catch(() => setTournaments([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchTournaments(); }, []);
 
   // ── Status transitions ──
-  const handleActivate = (id: number) => {
+  const handleActivate = async (id: number) => {
     const t = tournaments.find((x) => x.id === id);
     if (!t || !canActivate(t)) return;
     if (!window.confirm(`¿Activar el torneo "${t.name}"? La fecha de inicio debe ser posterior a hoy.`)) return;
-    setTournaments((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, status: "active" } : x))
-    );
+    try {
+      const updated = await tournamentService.activate(id);
+      setTournaments((prev) => prev.map((x) => (x.id === id ? updated : x)));
+    } catch { window.alert("Error al activar el torneo."); }
   };
 
-  const handleStart = (id: number) => {
+  const handleStart = async (id: number) => {
     const t = tournaments.find((x) => x.id === id);
     if (!t || !canStart(t)) return;
     if (!window.confirm(`¿Iniciar el torneo "${t.name}"? Esto lo cambiará a En Progreso.`)) return;
-    setTournaments((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, status: "in_progress" } : x))
-    );
+    try {
+      const updated = await tournamentService.start(id);
+      setTournaments((prev) => prev.map((x) => (x.id === id ? updated : x)));
+    } catch { window.alert("Error al iniciar el torneo."); }
   };
 
-  const handleFinish = (id: number) => {
+  const handleFinish = async (id: number) => {
     const t = tournaments.find((x) => x.id === id);
     if (!t || !canFinish(t)) return;
     if (!window.confirm(`¿Finalizar el torneo "${t.name}"?`)) return;
-    setTournaments((prev) =>
-      prev.map((x) => (x.id === id ? { ...x, status: "finished" } : x))
-    );
+    try {
+      const updated = await tournamentService.finish(id);
+      setTournaments((prev) => prev.map((x) => (x.id === id ? updated : x)));
+    } catch { window.alert("Error al finalizar el torneo."); }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const t = tournaments.find((x) => x.id === id);
     if (!t || !canDelete(t)) return;
     if (!window.confirm(`¿Eliminar el torneo "${t.name}"? Solo se pueden eliminar torneos en estado Borrador. Esta acción no se puede deshacer.`)) return;
-    setTournaments((prev) => prev.filter((x) => x.id !== id));
+    try {
+      await tournamentService.delete(id);
+      setTournaments((prev) => prev.filter((x) => x.id !== id));
+    } catch { window.alert("Error al eliminar el torneo."); }
   };
 
   // ── Edit modal ──
@@ -215,16 +185,32 @@ export function ManageTournaments() {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editForm || !validateEdit()) return;
     if (!window.confirm("¿Guardar los cambios del torneo?")) return;
-    setTournaments((prev) =>
-      prev.map((t) => (t.id === editForm.id ? { ...editForm } : t))
-    );
-    setShowEditModal(false);
-    setEditForm(null);
-    setOriginalEditForm(null);
-    window.alert("Cambios guardados correctamente.");
+    try {
+      let regulationFileName = editForm.regulationFileName;
+      if (pendingRegFile) {
+        const { fileName } = await tournamentService.uploadRegulation(pendingRegFile);
+        regulationFileName = fileName;
+      }
+      const updated = await tournamentService.update(editForm.id, {
+        name: editForm.name,
+        startDate: editForm.startDate,
+        endDate: editForm.endDate,
+        registrationCloseDate: editForm.registrationCloseDate,
+        maxTeams: editForm.maxTeams,
+        costPerTeam: editForm.costPerTeam,
+        courtIds: editForm.courts.map((c) => c.id),
+        regulationPdfUrl: regulationFileName ?? null,
+      });
+      setTournaments((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      setShowEditModal(false);
+      setEditForm(null);
+      setOriginalEditForm(null);
+      setPendingRegFile(null);
+      window.alert("Cambios guardados correctamente.");
+    } catch { window.alert("Error al guardar los cambios."); }
   };
 
   const handleDiscard = () => {
@@ -447,6 +433,17 @@ export function ManageTournaments() {
 
         {/* Tournament list */}
         <div className="space-y-4">
+          {loading && (
+            <div className="flex items-center justify-center py-10">
+              <p style={{ color: P.default, fontSize: "0.9rem", fontWeight: 500 }}>Cargando torneos...</p>
+            </div>
+          )}
+          {!loading && tournaments.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 gap-2 rounded-2xl" style={{ backgroundColor: `${P.default}10` }}>
+              <Trophy style={{ width: 32, height: 32, color: P.default, opacity: 0.5 }} />
+              <p style={{ color: P.default, fontSize: "0.9rem", fontWeight: 500 }}>No hay torneos creados aún.</p>
+            </div>
+          )}
           {tournaments.map((tournament, idx) => {
             const statusCfg = STATUS_CONFIG[tournament.status];
             return (

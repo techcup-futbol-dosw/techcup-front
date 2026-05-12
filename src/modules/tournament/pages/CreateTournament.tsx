@@ -4,6 +4,7 @@
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
+import { tournamentService, type CourtDto } from "../services/tournamentService";
 import {
   ChevronLeft,
   Save,
@@ -38,11 +39,7 @@ const MIN_TEAMS  = 2;
 const PDF_BUCKET = "tournament-rules";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────
-interface Cancha {
-  id:          string;
-  nombre:      string;
-  descripcion: string;
-}
+type Cancha = CourtDto;
 
 interface FormData {
   nombreTorneo:             string;
@@ -51,7 +48,7 @@ interface FormData {
   fechaFin:                 string;  
   fechaCierreInscripciones: string; 
   costoPorEquipo:           number;
-  canchasIds:               string[];
+  canchasIds:               number[];
   reglamentoPdfUrl:         string | null;
 }
 
@@ -92,26 +89,12 @@ export function CreateTournament() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Cargar canchas desde la BD ─────────────────────────────────────────
+  // ── Cargar canchas desde el API Gateway ───────────────────────────────
   useEffect(() => {
-
-    const fetchCanchas = async () => {
-      try {
-        await new Promise((r) => setTimeout(r, 800));
-        const mock: Cancha[] = [
-          { id: "c1", nombre: "Cancha Principal A", descripcion: "Césped natural" },
-          { id: "c2", nombre: "Cancha Principal B", descripcion: "Césped natural"   },
-          { id: "c3", nombre: "Cancha Lateral 1",   descripcion: "Césped natural"    },
-          { id: "c4", nombre: "Cancha Lateral 2",   descripcion: "Césped natural"    },
-        ];
-        setCanchas(mock);
-      } catch {
-        // El error no bloquea el formulario
-      } finally {
-        setLoadingCanchas(false);
-      }
-    };
-    fetchCanchas();
+    tournamentService.getCourts()
+      .then(setCanchas)
+      .catch(() => setCanchas([]))
+      .finally(() => setLoadingCanchas(false));
   }, []);
 
   // ── Handlers genéricos ────────────────────────────────────────────────
@@ -148,7 +131,7 @@ export function CreateTournament() {
   };
 
   // ── Toggle cancha ────────────────────────────────────────────────────
-  const toggleCancha = (id: string) => {
+  const toggleCancha = (id: number) => {
     setFormData((prev) => ({
       ...prev,
       canchasIds: prev.canchasIds.includes(id)
@@ -158,7 +141,7 @@ export function CreateTournament() {
     if (errors.canchasIds) setErrors((p) => ({ ...p, canchasIds: "" }));
   };
 
-  // ── Subida de PDF a Supabase Storage ─────────────────────────────────
+  // ── Subida de PDF al API Gateway ──────────────────────────────────────
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -166,10 +149,8 @@ export function CreateTournament() {
     setPdfFileName(file.name);
     if (errors.reglamentoPdfUrl) setErrors((p) => ({ ...p, reglamentoPdfUrl: "" }));
     try {
-
-      await new Promise((r) => setTimeout(r, 1200));
-      const fakeUrl = `https://<supabase-url>/storage/v1/object/public/${PDF_BUCKET}/reglamentos/${file.name}`;
-      setFormData((prev) => ({ ...prev, reglamentoPdfUrl: fakeUrl }));
+      const { url } = await tournamentService.uploadRegulation(file);
+      setFormData((prev) => ({ ...prev, reglamentoPdfUrl: url }));
     } catch {
       setErrors((p) => ({ ...p, reglamentoPdfUrl: "Error al subir el PDF. Intenta de nuevo." }));
       setPdfFileName(null);
@@ -231,12 +212,25 @@ export function CreateTournament() {
   };
 
   // ── Guardar torneo ────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) return;
 
-    console.log("Torneo a guardar:", formData);
-    setSaved(true);
-    setTimeout(() => navigate("/dashboard-organizer"), 2000);
+    try {
+      await tournamentService.create({
+        name:                  formData.nombreTorneo.trim(),
+        maxTeams:              formData.cantidadEquipos,
+        startDate:             formData.fechaInicio,
+        endDate:               formData.fechaFin,
+        registrationCloseDate: formData.fechaCierreInscripciones,
+        costPerTeam:           formData.costoPorEquipo,
+        courtIds:              formData.canchasIds,
+        regulationPdfUrl:      formData.reglamentoPdfUrl,
+      });
+      setSaved(true);
+      setTimeout(() => navigate("/organizer/tournaments"), 2000);
+    } catch {
+      setErrors((p) => ({ ...p, general: "Error al crear el torneo. Intenta de nuevo." }));
+    }
   };
 
   // ── Estilos compartidos ───────────────────────────────────────────────
@@ -465,10 +459,10 @@ export function CreateTournament() {
                     >
                       <span>
                         <span className="block" style={{ fontWeight: 600, fontSize: "0.85rem", color: sel ? P.info : P.default }}>
-                          {cancha.nombre}
+                          {cancha.name}
                         </span>
                         <span className="block" style={{ fontWeight: 500, fontSize: "0.72rem", color: "#aaa", marginTop: 2 }}>
-                          {cancha.descripcion}
+                          {cancha.description}
                         </span>
                       </span>
                       {sel && <CheckCircle2 style={{ width: 16, height: 16, color: P.info, flexShrink: 0 }} />}

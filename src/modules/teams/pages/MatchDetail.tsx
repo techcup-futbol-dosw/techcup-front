@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useParams, useNavigate } from "react-router";
-import { assignedMatches } from "../data/matchesData";
+import { matchService, type MatchDetailDto } from "../services/matchService";
 import {
   ArrowLeft,
   Flag,
@@ -399,16 +399,32 @@ export function MatchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const match = assignedMatches.find((m) => m.id === Number(id));
+  // ── Match data from API ──
+  const [match, setMatch] = useState<MatchDetailDto | null>(null);
+  const [loadingMatch, setLoadingMatch] = useState(true);
 
-  const [matchState, setMatchState] = useState<MatchState>(
-    match?.status === "en-curso" ? "en-curso" : "no-iniciado"
-  );
+  useEffect(() => {
+    if (!id) return;
+    matchService.getById(Number(id))
+      .then(setMatch)
+      .catch(() => setMatch(null))
+      .finally(() => setLoadingMatch(false));
+  }, [id]);
+
+  const [matchState, setMatchState] = useState<MatchState>("no-iniciado");
+
+  // Sync matchState when match data arrives
+  useEffect(() => {
+    if (match?.status === "en-curso") {
+      setMatchState("en-curso");
+      setTimerRunning(true);
+    }
+  }, [match]);
 
   // Timer
-  const [timerRunning, setTimerRunning] = useState(match?.status === "en-curso");
-  const [minute, setMinute] = useState(match?.status === "en-curso" ? 12 : 0);
-  const [seconds, setSeconds] = useState(0); // real-time seconds within the minute
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [minute, setMinute] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   const matchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Halftime
@@ -430,20 +446,27 @@ export function MatchDetail() {
   const [recentActionsOpen, setRecentActionsOpen] = useState(false);
 
   const teamActors: Record<TeamKey, string[]> = {
-    a: ["Luis Torres", "Andrés Gil", "Mateo Díaz", "Juan Ríos"],
-    b: ["Daniel Mora", "Carlos Ruiz", "Jhon Pérez", "Sergio León"],
+    a: match?.playersA.map((p) => p.name) ?? [],
+    b: match?.playersB.map((p) => p.name) ?? [],
   };
 
-  // Pre-load if already en-curso
-  useEffect(() => {
-    if (match?.status === "en-curso") {
-      setScore({ a: 1, b: 0 });
-      setCounters({
-        a: { gol: 1, amarilla: 0, roja: 0, esquina: 0, falta: 0 },
-        b: { gol: 0, amarilla: 1, roja: 0, esquina: 0, falta: 2 },
-      });
-    }
-  }, []);
+  // Loading screen
+  if (loadingMatch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
+        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Cargando partido...</p>
+      </div>
+    );
+  }
+
+  if (!match) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
+        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Partido no encontrado.</p>
+        <button onClick={() => navigate(-1)} style={{ color: "white", fontWeight: 600, fontSize: "0.85rem", textDecoration: "underline" }}>Volver</button>
+      </div>
+    );
+  }
 
   // Match timer (real seconds -> converts to minutes)
   useEffect(() => {

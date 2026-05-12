@@ -9,6 +9,7 @@ import {
   DollarSign, CheckCircle2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { tournamentService } from "@/modules/tournament/services/tournamentService";
 
 const P = {
   primary:     "#B81C1C",
@@ -94,22 +95,30 @@ export function Tournament() {
   const [showReglamento, setShowReglamento] = useState(false);
   const [torneo, setTorneo] = useState<TorneoInfo | null>(null);
 
-  // TODO: reemplazar con GET /api/tournaments/active
   useEffect(() => {
-    setTorneo({
-      nombre: "TECHCUP Fútbol 2026-I",
-      estado: "En Progreso",
-      fechaInicio: "15 Ene 2026",
-      fechaFin: "30 Mar 2026",
-      fechaCierreInscripciones: "10 Ene 2026",
-      cantidadEquipos: 8,
-      costo: 35000,
-      reglamentoUrl: null, // URL real del PDF cuando esté disponible
-      canchas: [
-        { id: 1, nombre: "Cancha Principal",   descripcion: "Campo de césped sintético — capacidad 200 espectadores" },
-        { id: 2, nombre: "Cancha Secundaria",  descripcion: "Campo de grama natural — partidos de fase de grupos" },
-      ],
-    });
+    tournamentService.list()
+      .then((list) => {
+        const active = list.find((t) => t.status === "in_progress" || t.status === "active") ?? list[0] ?? null;
+        if (!active) return;
+        const estadoMap: Record<string, TorneoEstado> = {
+          draft:       "Borrador",
+          active:      "Activo",
+          in_progress: "En Progreso",
+          finished:    "Finalizado",
+        };
+        setTorneo({
+          nombre:                    active.name,
+          estado:                    estadoMap[active.status] ?? "Activo",
+          fechaInicio:               active.startDate,
+          fechaFin:                  active.endDate,
+          fechaCierreInscripciones:  active.registrationCloseDate,
+          cantidadEquipos:           active.maxTeams,
+          costo:                     active.costPerTeam,
+          reglamentoUrl:             active.regulationFileName ?? null,
+          canchas:                   active.courts.map((c) => ({ id: c.id, nombre: c.name, descripcion: c.description })),
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const estadoCfg = torneo ? estadoStyle[torneo.estado] : null;

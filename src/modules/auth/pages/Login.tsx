@@ -6,7 +6,7 @@ import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Shield, Mail, Lock, Eye, EyeOff, ArrowLeft, CheckCircle } from "lucide-react";
 import { useState } from "react";
-import { useNavigate, Link } from "react-router";
+import { useNavigate, Link, Navigate } from "react-router";
 import { useAuth } from "@/core/auth/AuthContext.tsx";
 import { ApiError } from "@/core/api/http";
 import logoTechcup from "@/assets/logo.png";
@@ -19,7 +19,26 @@ const P = {
 
 type View = "login" | "forgot" | "forgot-sent";
 
+function resolveDashboardPath(roles: string[] | undefined): string {
+  const r = (roles ?? []).map((role) => role.toUpperCase());
+  if (r.includes("ADMIN"))     return "/dashboard-admin";
+  if (r.includes("ORGANIZER")) return "/dashboard-organizer";
+  if (r.includes("REFEREE"))   return "/dashboard-arbitro";
+  return "/dashboard-player";
+}
+
 export function Login() {
+  const { login, isAuthenticated, isBootstrapping, roles } = useAuth();
+
+  // Already logged in → go to the right dashboard immediately
+  if (!isBootstrapping && isAuthenticated) {
+    return <Navigate to={resolveDashboardPath(roles)} replace />;
+  }
+
+  return <LoginForm />;
+}
+
+function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockPassword, setCapsLockPassword] = useState(false);
@@ -91,23 +110,6 @@ export function Login() {
   };
 
 
-  const resolveDashboardPath = (roles: string[] | undefined) => {
-    const normalizedRoles = (roles ?? []).map((role) => role.toUpperCase());
-
-    if (normalizedRoles.includes("ADMIN")) {
-      return "/dashboard-admin";
-    }
-
-    if (normalizedRoles.includes("ORGANIZER")) {
-      return "/dashboard-organizer";
-    }
-
-    if (normalizedRoles.includes("REFEREE")) {
-      return "/dashboard-arbitro";
-    }
-
-    return "/dashboard";
-  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -132,25 +134,21 @@ export function Login() {
     setTimeout(() => { setIsLoading(false); setView("forgot-sent"); }, 1500);
   };
 
-  const resolveLoginErrorMessage = (error: unknown) => {
+  const resolveLoginErrorMessage = (error: unknown): string => {
     if (error instanceof ApiError) {
-      if (error.status === 401) {
-        return "Credenciales inválidas";
-      }
-
-      if (error.status === 403) {
-        return "No tienes permisos para acceder";
-      }
-
-      if (error.message) {
-        return error.message;
-      }
+      const serverMsg = typeof error.payload === "object" && error.payload !== null && "message" in error.payload
+        ? String((error.payload as { message: unknown }).message)
+        : null;
+      const detail = serverMsg ?? error.message;
+      if (error.status === 401) return `Credenciales inválidas${import.meta.env.DEV && detail ? ` — ${detail}` : ""}`;
+      if (error.status === 403) return "No tienes permisos para acceder";
+      if (error.status === 0 || error.status >= 500) return `Error del servidor (${error.status})${import.meta.env.DEV && detail ? `: ${detail}` : ""}`;
+      return detail || `Error ${error.status}`;
     }
-
-    if (error instanceof Error && error.message) {
-      return error.message;
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      return "No se pudo conectar al servidor. Verifica tu conexión.";
     }
-
+    if (error instanceof Error) return error.message;
     return "No fue posible iniciar sesión. Inténtalo de nuevo.";
   };
 
@@ -389,38 +387,7 @@ export function Login() {
                   <Link to="/" style={{ fontSize: "0.82rem", color: "#8A8A8E", fontWeight: 500 }}>← Volver al inicio</Link>
                 </p>
 
-                {/* Quick access buttons */}
-                <div className="mt-6 pt-5" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-                  <p className="text-center mb-3" style={{ fontSize: "0.72rem", fontWeight: 600, color: "#8A8A8E", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                    Acceso rápido (demo)
-                  </p>
-                  <div className="flex gap-2">
-                    {[
-                      { label: "Usuario", path: "/dashboard", color: "#6E6E73" },
-                      { label: "Árbitro", path: "/dashboard-arbitro", color: P.secondary },
-                      { label: "Organizador", path: "/dashboard-organizer", color: P.primary },
-                    ].map(({ label, path, color }) => (
-                      <motion.button
-                        key={label}
-                        type="button"
-                        onClick={() => navigate(path)}
-                        whileHover={{ scale: 1.04, y: -1 }}
-                        whileTap={{ scale: 0.96 }}
-                        className="flex-1 text-white"
-                        style={{
-                          backgroundColor: color,
-                          fontSize: "0.72rem",
-                          fontWeight: 600,
-                          padding: "0.45rem 0.5rem",
-                          borderRadius: "10px",
-                          letterSpacing: "0.01em",
-                        }}
-                      >
-                        {label}
-                      </motion.button>
-                    ))}
-                  </div>
-                </div>
+
               </motion.div>
             )}
 
@@ -548,5 +515,4 @@ export function Login() {
     </div>
   );
 }
-
 

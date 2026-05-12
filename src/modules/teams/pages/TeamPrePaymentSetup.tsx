@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "react-router";
-import { AlertCircle, ArrowLeft, CheckCircle2, Palette, Shield, Users, Shirt, Upload } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router";
+import { AlertCircle, ArrowLeft, CheckCircle2, Palette, Shield, Users, Shirt, Upload, Search } from "lucide-react";
 import { readUICache, writeUICache } from "@/core/utils/uiCache";
 
 const P = {
@@ -57,17 +57,7 @@ interface StoredTeamContext {
 
 const formationOptions = ["4-3-3", "1-4-4-2", "1-4-2-3-1", "1-5-3-2", "1-3-5-2"];
 
-const defaultMembers: TeamRosterMember[] = [
-  { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: 10 },
-  { id: 2, name: "mateo", email: "mateo@mail.edu", role: "Jugador", jerseyNumber: 11 },
-  { id: 3, name: "isabela", email: "isabela@mail.edu", role: "Jugador", jerseyNumber: 7 },
-  { id: 4, name: "santiago", email: "santiago@mail.edu", role: "Jugador", jerseyNumber: 3 },
-  { id: 5, name: "camila", email: "camila@mail.edu", role: "Jugador", jerseyNumber: 1 },
-  { id: 6, name: "nicolas", email: "nicolas@mail.edu", role: "Jugador", jerseyNumber: 5 },
-  { id: 7, name: "paula", email: "paula@mail.edu", role: "Jugador", jerseyNumber: 16 },
-  { id: 8, name: "juan", email: "juan@mail.edu", role: "Jugador", jerseyNumber: 20 },
-];
-
+const defaultMembers: TeamRosterMember[] = [];
 const defaultSchedule: TeamScheduleItem[] = [];
 
 const getLineupSignature = (lineup: { formation: string; starters: number[] }) => {
@@ -77,6 +67,7 @@ const getLineupSignature = (lineup: { formation: string; starters: number[] }) =
 
 export function TeamPrePaymentSetup() {
   const location = useLocation();
+  const navigate = useNavigate();
   const state = (location.state as TeamSetupState | undefined) ?? {};
 
   const loadStoredTeamContext = () => {
@@ -90,7 +81,7 @@ export function TeamPrePaymentSetup() {
   const isLockedByPayment = teamStatus === "in-review" || teamStatus === "active";
   const canEdit = roleInTeam === "capitan" && !isLockedByPayment;
 
-  const [teamName] = useState(state.teamName ?? storedTeamContext?.teamName ?? "alfa");
+  const [teamName] = useState(state.teamName ?? storedTeamContext?.teamName ?? "");
   const [members, setMembers] = useState<TeamRosterMember[]>(state.teamMembers?.length ? state.teamMembers : storedTeamContext?.teamMembers?.length ? storedTeamContext.teamMembers : defaultMembers);
   const [savedPrimaryColor, setSavedPrimaryColor] = useState(storedTeamContext?.primaryColor ?? "#B81C1C");
   const [savedSecondaryColor, setSavedSecondaryColor] = useState(storedTeamContext?.secondaryColor ?? "#C4841D");
@@ -542,7 +533,7 @@ export function TeamPrePaymentSetup() {
 
           <div className="rounded-2xl border p-3 mb-4" style={{ borderColor: "rgba(0,0,0,0.08)", backgroundColor: "#FAFAFA" }}>
             <p className="text-xs mb-2" style={{ color: P.textPrimary, fontWeight: 700 }}>Agregar jugador</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_auto_auto] gap-2">
               <input
                 disabled={!canEdit}
                 value={newMemberEmail}
@@ -566,7 +557,7 @@ export function TeamPrePaymentSetup() {
                 type="button"
                 disabled={!canEdit || members.length >= 12}
                 onClick={addMember}
-                className="rounded-lg border px-3 py-1.5 text-xs"
+                className="rounded-lg border px-4 py-1.5 text-xs whitespace-nowrap"
                 style={{
                   borderColor: `${P.info}45`,
                   color: P.info,
@@ -576,6 +567,20 @@ export function TeamPrePaymentSetup() {
                 }}
               >
                 Agregar
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/player-search")}
+                className="rounded-lg border px-4 py-1.5 text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
+                style={{
+                  borderColor: `${P.primary}45`,
+                  color: P.primary,
+                  fontWeight: 800,
+                  backgroundColor: "white",
+                }}
+              >
+                <Search style={{ width: 12, height: 12 }} />
+                Buscar jugador
               </button>
             </div>
             {memberError && <p className="text-xs mt-2" style={{ color: P.primary, fontWeight: 700 }}>{memberError}</p>}
