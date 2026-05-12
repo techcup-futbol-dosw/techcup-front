@@ -16,7 +16,8 @@ import { TeamPrePaymentSetup } from "@/modules/teams/pages/TeamPrePaymentSetup";
 import { Events } from "@/modules/competition/pages/Events";
 import { Profile } from "@/modules/users/pages/Profile";
 import { SportsProfile } from "@/modules/users/pages/SportsProfile";
-import  PlayerSearch  from "@/modules/users/pages/PlayerSearch";
+import PlayerSearch from "@/modules/users/pages/PlayerSearch";
+import PendingInvitations from "@/modules/users/pages/PendingInvitations";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -52,6 +53,7 @@ export const router = createBrowserRouter([
       { path: "sport-profile", Component: SportsProfile },
       { path: "profile", Component: Profile },
       { path: "player-search", Component: PlayerSearch },
+      { path: "pending-invitations", Component: PendingInvitations },
       { path: "matches", Component: Matches },
       { path: "schedule", Component: Schedule },
       { path: "scores", Component: Scores },
