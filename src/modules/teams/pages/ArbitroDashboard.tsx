@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
 import logoTechcup from "@/assets/logo.png";
-import { assignedMatches } from "../data/matchesData";
+import { matchService, type AssignedMatchDto } from "../services/matchService";
 import {
   User,
   Swords,
@@ -113,7 +113,18 @@ export function ArbitroDashboard() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
 
-  const todayMatches = assignedMatches.filter((m) => m.date === "Hoy");
+  const [allMatches, setAllMatches] = useState<AssignedMatchDto[]>([]);
+  const [loadingMatches, setLoadingMatches] = useState(true);
+
+  useEffect(() => {
+    matchService.getAssigned()
+      .then(setAllMatches)
+      .catch(() => setAllMatches([]))
+      .finally(() => setLoadingMatches(false));
+  }, []);
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  const todayMatches = allMatches.filter((m) => m.date === todayStr);
 
   const updateScroll = () => {
     const el = scrollRef.current;
@@ -291,9 +302,9 @@ export function ArbitroDashboard() {
             {/* Stats */}
             <div className="flex flex-wrap gap-2.5 mb-6">
               {[
-                { label: "Asignados", value: assignedMatches.length, color: "rgba(255,255,255,0.12)" },
+                { label: "Asignados", value: allMatches.length, color: "rgba(255,255,255,0.12)" },
                 { label: "Hoy", value: todayMatches.length, color: `${P.success}30`, textColor: "#5EFFA3" },
-                { label: "Pendientes", value: assignedMatches.filter((m) => m.status === "pendiente").length, color: `${P.secondary}30`, textColor: "#FFD27A" },
+                { label: "Pendientes", value: allMatches.filter((m) => m.status === "pendiente").length, color: `${P.secondary}30`, textColor: "#FFD27A" },
               ].map((stat) => (
                 <div key={stat.label} className="flex items-center gap-2 px-3 py-1.5 rounded-xl" style={{ backgroundColor: stat.color }}>
                   <span style={{ fontSize: "0.95rem", fontWeight: 800, color: (stat as any).textColor ?? "rgba(255,255,255,0.9)" }}>
@@ -339,7 +350,11 @@ export function ArbitroDashboard() {
             </div>
 
             {/* Carousel */}
-            {todayMatches.length === 0 ? (
+            {loadingMatches ? (
+              <div className="flex items-center justify-center py-6 rounded-2xl" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
+                <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.85rem", fontWeight: 500 }}>Cargando partidos...</span>
+              </div>
+            ) : todayMatches.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 rounded-2xl gap-2" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
                 <AlertCircle className="w-6 h-6" style={{ color: "rgba(255,255,255,0.4)" }} />
                 <p style={{ fontSize: "0.82rem", color: "rgba(255,255,255,0.45)", fontWeight: 500 }}>

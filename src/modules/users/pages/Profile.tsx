@@ -1,10 +1,8 @@
-﻿/**
- * @file src\modules\users\pages\Profile.tsx
- * @description Main source file for the DemoFront application architecture.
- */
-import { motion, AnimatePresence } from "motion/react";
+﻿import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
+import { useAuth } from "@/core/auth/AuthContext";
+import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
 import {
   ArrowLeft,
   Edit2,
@@ -42,13 +40,13 @@ function SectionLabel({ text, color }: { text: string; color: string }) {
   );
 }
 
-const activityLog = [
-  { id: "1", action: "Inscrito en torneo TECHCUP Spring", time: "Hace 2 días", color: P.success },
-  { id: "2", action: "Cambio de contraseña realizado", time: "Hace 3 días", color: P.info },
-  { id: "3", action: "Perfil actualizado", time: "Hace 1 semana", color: P.secondary },
-  { id: "4", action: "Nuevo logro: Top Scorer", time: "Hace 2 semanas", color: P.primary },
-  { id: "5", action: "Partido completado vs Equipo Nova", time: "Hace 3 semanas", color: P.default },
-];
+const ACTIVITY_COLOR: Record<string, string> = {
+  tournament: P.success,
+  security:   P.info,
+  profile:    P.secondary,
+  match:      P.primary,
+  other:      P.default,
+};
 
 function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
   return (
@@ -100,20 +98,30 @@ const getBadgeLabel = (context: string): string => {
   return "Usuario";
 };
 
-// Helper: Calcular delay con Number.parseInt
-const getActivityDelay = (id: string): number => {
-  return Number.parseInt(id, 10) * 0.07;
-};
 
 export function Profile() {
   const navigate = useNavigate();
+  const { accountId } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("settings");
-  const firstName = "Alex";
-  const lastName = "Rivers";
-  const email = "alex.rivers@techcup.io";
-  const [bio, setBio] = useState(
-    "Apasionado por la integración de análisis de datos en el entrenamiento deportivo. Entrenador part-time en TechCup Academy."
-  );
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [bio, setBio] = useState("");
+  const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
+
+  useEffect(() => {
+    if (!accountId) return;
+    userService.getMe().then((u) => {
+      setFirstName(u.name);
+      setLastName(u.lastName);
+      setEmail(u.email);
+      setBio(u.bio ?? "");
+      setBioDraft(u.bio ?? "");
+    }).catch(() => {});
+    userService.getActivity().then(setActivityLog).catch(() => {});
+  }, [accountId]);
+
   const [bioDraft, setBioDraft] = useState(bio);
   const [showBioEditor, setShowBioEditor] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -153,13 +161,18 @@ export function Profile() {
     setShowBioEditor(true);
   };
 
-  const handleSaveBio = () => {
-    setBio(bioDraft);
-    setShowBioEditor(false);
-    showFeedback("Biografía actualizada correctamente.");
+  const handleSaveBio = async () => {
+    try {
+      await userService.updateMe({ bio: bioDraft });
+      setBio(bioDraft);
+      setShowBioEditor(false);
+      showFeedback("Biografía actualizada correctamente.");
+    } catch {
+      showFeedback("No se pudo guardar la biografía.");
+    }
   };
 
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     if (!currentPassword.trim()) {
       setPasswordError("Ingresa la contraseña actual.");
       return;
@@ -172,12 +185,17 @@ export function Profile() {
       setPasswordError("La nueva contraseña y su confirmación no coinciden.");
       return;
     }
-    setShowPasswordModal(false);
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
-    setPasswordError("");
-    showFeedback("Contraseña actualizada correctamente.");
+    try {
+      await userService.changePassword({ currentPassword, newPassword });
+      setShowPasswordModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordError("");
+      showFeedback("Contraseña actualizada correctamente.");
+    } catch {
+      setPasswordError("Contraseña actual incorrecta.");
+    }
   };
 
   // Handlers para elemento interactivo de actividad
@@ -517,34 +535,39 @@ export function Profile() {
               >
                 <SectionLabel text="Actividad Reciente" color={P.primary} />
                 <div className="space-y-2">
-                  {activityLog.map((item) => (
+                  {activityLog.length === 0 && (
+                    <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>Sin actividad reciente.</p>
+                  )}
+                  {activityLog.map((item, idx) => {
+                    const key = String(item.id);
+                    const dotColor = ACTIVITY_COLOR[item.category] ?? P.default;
+                    return (
                     <motion.div
-                      key={item.id}
-                      ref={(el) => {
-                        if (el) activityRefs.current[item.id] = el;
-                      }}
+                      key={key}
+                      ref={(el) => { if (el) activityRefs.current[key] = el; }}
                       role="button"
                       tabIndex={0}
                       initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: getActivityDelay(item.id) }}
+                      transition={{ delay: idx * 0.07 }}
                       className="flex items-start gap-3 p-3.5 rounded-2xl transition-colors duration-200 cursor-pointer"
                       style={{ backgroundColor: "transparent" }}
-                      onMouseEnter={() => handleActivityMouseEnter(item.id)}
-                      onMouseLeave={() => handleActivityMouseLeave(item.id)}
-                      onKeyDown={(e) => handleActivityKeyDown(e, item.id)}
-                      onTouchStart={() => handleActivityTouchStart(item.id)}
-                      onTouchEnd={() => handleActivityTouchEnd(item.id)}
-                      aria-label={`Actividad: ${item.action}, ${item.time}`}
-                      aria-pressed={activeActivityId === item.id}
+                      onMouseEnter={() => handleActivityMouseEnter(key)}
+                      onMouseLeave={() => handleActivityMouseLeave(key)}
+                      onKeyDown={(e) => handleActivityKeyDown(e, key)}
+                      onTouchStart={() => handleActivityTouchStart(key)}
+                      onTouchEnd={() => handleActivityTouchEnd(key)}
+                      aria-label={`Actividad: ${item.action}, ${item.createdAt}`}
+                      aria-pressed={activeActivityId === key}
                     >
-                      <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: item.color }} />
+                      <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: dotColor }} />
                       <div className="flex-1 min-w-0">
                         <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.action}</p>
-                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>{item.time}</p>
+                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>{item.createdAt}</p>
                       </div>
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </div>
               </motion.div>
             )}
