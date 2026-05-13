@@ -1,5 +1,5 @@
 // src/modules/users/pages/PlayerSearch.tsx
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
 import logoTechcup from "@/assets/logo.png";
@@ -26,8 +26,31 @@ const P = {
   bg: "#F2F2F7",
 };
 
-// PlayerDto is imported from playerService
+// ── Mock data (fallback). Nota: algunos registros no son estudiantes => semestre = ""
+interface LocalPlayer {
+  id: string;
+  nombre: string;
+  identificacion: string;
+  edad: number;
+  genero: "masculino" | "femenino" | "otro";
+  posicion: string;
+  semestre: string; // "" indica que NO es estudiante / no aplica
+  foto: string | null;
+  dorsal: string;
+  disponibilidad: boolean;
+  email: string;
+}
 
+const JUGADORES_MOCK: LocalPlayer[] = [
+  { id: "1", nombre: "Carlos Martínez", identificacion: "1234567890", edad: 21, genero: "masculino", posicion: "delantero", semestre: "5", foto: null, dorsal: "10", disponibilidad: true, email: "carlos.martinez@universidad.edu" },
+  { id: "2", nombre: "Ana García", identificacion: "0987654321", edad: 20, genero: "femenino", posicion: "volante", semestre: "6", foto: null, dorsal: "8", disponibilidad: false, email: "ana.garcia@universidad.edu" },
+  { id: "3", nombre: "Juan Pérez", identificacion: "1122334455", edad: 22, genero: "masculino", posicion: "defensa", semestre: "7", foto: null, dorsal: "4", disponibilidad: true, email: "juan.perez@universidad.edu" },
+  { id: "4", nombre: "María López", identificacion: "5544332211", edad: 19, genero: "femenino", posicion: "portero", semestre: "4", foto: null, dorsal: "1", disponibilidad: true, email: "maria.lopez@universidad.edu" },
+  // Ejemplo: este jugador NO es estudiante -> semestre vacío
+  { id: "5", nombre: "Diego Ramírez", identificacion: "9988776655", edad: 23, genero: "masculino", posicion: "volante", semestre: "", foto: null, dorsal: "6", disponibilidad: false, email: "diego.ramirez@empresa.com" },
+];
+
+// ── Position meta ─────────────────────────────────
 const positionMeta: Record<string, { label: string; bg: string; color: string }> = {
   portero:   { label: "Portero",   bg: "rgba(0,102,254,0.10)",   color: "#0066FE" },
   defensa:   { label: "Defensa",   bg: "rgba(23,201,100,0.10)",  color: "#17C964" },
@@ -35,8 +58,9 @@ const positionMeta: Record<string, { label: string; bg: string; color: string }>
   delantero: { label: "Delantero", bg: "rgba(184,28,28,0.10)",   color: "#B81C1C" },
 };
 
+// ── Helpers ───────────────────────────────────────
 function highlight(text: string, query: string) {
-  if (!query.trim()) return <span>{text}</span>;
+  if (!query || !query.trim()) return <span>{text}</span>;
   const re = new RegExp(`(${query.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")})`, "ig");
   return (
     <>
@@ -53,10 +77,41 @@ function highlight(text: string, query: string) {
   );
 }
 
-// ── PlayerCard ────────────────────────────────────
-function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; query: string; onInvite: (id: string) => void; invited: boolean }) {
-  const pos = positionMeta[player.posicion] ?? { label: player.posicion, bg: `${P.default}14`, color: P.default };
-  const avail = player.disponibilidad;
+// Retornado por petición del diseño: color de borde según disponibilidad.
+// Ahora se usa dentro de PlayerCard para evitar TS6133.
+function availabilityBorderColor(available: boolean): string {
+  return available ? "#17C964" : "#B81C1C";
+}
+
+// Valida edad: debe ser vacío (sin filtro) o número entero entre 16 y 99
+function validateAgeInput(ageStr: string): string | null {
+  const trimmed = ageStr.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+$/.test(trimmed)) return "La edad debe ser un número entero.";
+  const n = Number.parseInt(trimmed, 10);
+  if (Number.isNaN(n)) return "Edad inválida.";
+  if (n < 16) return "La edad mínima permitida es 16.";
+  if (n > 99) return "La edad máxima permitida es 99.";
+  return null;
+}
+
+// Valida identificación: vacío o dígitos únicamente
+function validateIdInput(idStr: string): string | null {
+  const trimmed = idStr.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+$/.test(trimmed)) return "La identificación debe contener solo dígitos.";
+  return null;
+}
+
+// ── PlayerCard (sin botón de invitar) ────────────
+function PlayerCard({ player, query }: { player: PlayerDto; query: string }) {
+  const p = player as any;
+  const pos = positionMeta[p.posicion] ?? { label: p.posicion ?? "—", bg: `${P.default}14`, color: P.default };
+  const avail = Boolean(p.disponibilidad);
+  const hasSemestre = typeof p.semestre === "string" && p.semestre.trim() !== "";
+
+  // Usamos availabilityBorderColor para el borde (soluciona TS6133)
+  const borderColor = availabilityBorderColor(avail);
 
   return (
     <motion.article
@@ -66,9 +121,8 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
       transition={{ duration: 0.3 }}
       className="bg-white rounded-[20px] p-5 flex flex-col gap-4"
       style={{
-        boxShadow: avail
-          ? `0 0 0 1.5px ${P.success}40, 0 4px 16px rgba(0,0,0,0.05)`
-          : `0 0 0 1.5px ${P.primary}30, 0 4px 16px rgba(0,0,0,0.05)`,
+        border: `2px solid ${borderColor}`,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
       }}
     >
       {/* Top row */}
@@ -78,13 +132,13 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
           className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-xl"
           style={{ background: `linear-gradient(135deg, ${P.primary}, ${P.secondary})`, fontWeight: 800 }}
         >
-          {player.dorsal}
+          {p.dorsal ?? "?"}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-base leading-snug" style={{ fontWeight: 700, color: P.textPrimary }}>
-              {highlight(player.nombre, query)}
+              {highlight(p.nombre ?? "—", query)}
             </h3>
             <span
               className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1"
@@ -102,9 +156,13 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: pos.bg, color: pos.color }}>
               {pos.label}
             </span>
-            <span className="text-xs" style={{ color: P.default }}>{player.edad} años</span>
-            <span className="text-xs" style={{ color: P.default }}>·</span>
-            <span className="text-xs" style={{ color: P.default }}>{player.semestre}°</span>
+            <span className="text-xs" style={{ color: P.default }}>{p.edad ?? "—"} años</span>
+            {hasSemestre && (
+              <>
+                <span className="text-xs" style={{ color: P.default }}>·</span>
+                <span className="text-xs" style={{ color: P.default }}>{p.semestre}°</span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -112,34 +170,19 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
       {/* Info */}
       <div className="rounded-xl px-3 py-2.5 space-y-0.5" style={{ backgroundColor: P.bg }}>
         <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>
-          ID: <span style={{ color: P.textPrimary }}>{player.identificacion}</span>
+          ID: <span style={{ color: P.textPrimary }}>{p.identificacion ?? "—"}</span>
         </p>
         <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>
-          <span style={{ color: P.textPrimary }}>{player.email}</span>
+          <span style={{ color: P.textPrimary }}>{p.email ?? "—"}</span>
         </p>
       </div>
 
-      {/* Invite button */}
-      <motion.button
-        whileHover={!invited ? { scale: 1.02 } : {}}
-        whileTap={!invited ? { scale: 0.98 } : {}}
-        type="button"
-        onClick={() => !invited && onInvite(player.id)}
-        className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2"
-        style={{
-          backgroundColor: invited ? P.success : P.primary,
-          fontWeight: 700,
-          boxShadow: invited ? `0 4px 14px ${P.success}35` : `0 4px 14px ${P.primary}35`,
-          cursor: invited ? "default" : "pointer",
-        }}
-      >
-        {invited ? <><Check style={{ width: 15, height: 15 }} /> Invitación enviada</> : "Invitar al Equipo"}
-      </motion.button>
+      {/* Nota: botón de invitar eliminado intencionalmente */}
     </motion.article>
   );
 }
 
-// ── PlayerSearch ──────────────────────────────────
+// ── PlayerSearch (combinado, con validaciones) ───
 export default function PlayerSearch() {
   const navigate = useNavigate();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -147,22 +190,54 @@ export default function PlayerSearch() {
   const [filters, setFilters] = useState({
     nombre: "", identificacion: "", posicion: "", edad: "", genero: "", semestre: "", onlyAvailable: false,
   });
+  const [ageError, setAgeError] = useState<string | null>(null);
+  const [idError, setIdError] = useState<string | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [players, setPlayers] = useState<PlayerDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [invited, setInvited] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const [usingMock, setUsingMock] = useState(false);
 
   const [debouncedName, setDebouncedName] = useState(filters.nombre);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedName(filters.nombre), 400);
+    const t = setTimeout(() => setDebouncedName(filters.nombre), 350);
     return () => clearTimeout(t);
   }, [filters.nombre]);
 
+  // Valida edad cada vez que cambia el filtro de edad
+  useEffect(() => {
+    const err = validateAgeInput(filters.edad);
+    setAgeError(err);
+  }, [filters.edad]);
+
+  // Valida identificación cada vez que cambia el filtro de identificación
+  useEffect(() => {
+    const err = validateIdInput(filters.identificacion);
+    setIdError(err);
+  }, [filters.identificacion]);
+
   const fetchPlayers = useCallback(async () => {
+    // Si la edad o la identificación son inválidas, no intentamos buscar y mostramos error
+    const ageValidation = validateAgeInput(filters.edad);
+    const idValidation = validateIdInput(filters.identificacion);
+
+    if (ageValidation) {
+      setApiError(ageValidation);
+      setPlayers([]);
+      setLoading(false);
+      return;
+    }
+    if (idValidation) {
+      setApiError(idValidation);
+      setPlayers([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setApiError(null);
+    setUsingMock(false);
     try {
       const data = await playerService.search({
         query: debouncedName || undefined,
@@ -174,9 +249,11 @@ export default function PlayerSearch() {
         soloDisponibles: filters.onlyAvailable || undefined,
       } as Parameters<typeof playerService.search>[0]);
       setPlayers(data);
-    } catch {
-      setApiError("No se pudo cargar la lista de jugadores.");
-      setPlayers([]);
+    } catch (err) {
+      setPlayers(JUGADORES_MOCK as unknown as PlayerDto[]);
+      setUsingMock(true);
+      setToast("No se pudo conectar al servidor — usando datos locales (mock)");
+      setApiError(null);
     } finally {
       setLoading(false);
     }
@@ -197,32 +274,50 @@ export default function PlayerSearch() {
 
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2800);
+    const t = setTimeout(() => setToast(null), 3200);
     return () => clearTimeout(t);
   }, [toast]);
 
   const update = (field: keyof typeof filters, value: string | boolean) =>
     setFilters((prev) => ({ ...prev, [field]: value }));
 
-  const results = players.sort((a, b) => a.nombre.localeCompare(b.nombre));
-
   const clearFilters = () => {
     setFilters({ nombre: "", identificacion: "", posicion: "", edad: "", genero: "", semestre: "", onlyAvailable: false });
     setShowAdvanced(false);
+    setAgeError(null);
+    setIdError(null);
+    setApiError(null);
+    setToast("Filtros limpiados");
   };
 
-  const handleInvite = async (id: string) => {
-    const p = players.find((x) => x.id === id);
-    try {
-      await playerService.invite(id);
-      setInvited((prev) => new Set([...prev, id]));
-      if (p) setToast(`Invitación enviada a ${p.nombre}`);
-    } catch {
-      setToast("No se pudo enviar la invitación.");
+  const results = useMemo(() => {
+    const qName = debouncedName.trim().toLowerCase();
+    const qId = filters.identificacion.trim();
+
+    const list = (players && players.length > 0 ? players : []) as unknown as any[];
+
+    let r = list.slice();
+
+    if (qName) r = r.filter((p) => (p.nombre ?? "").toLowerCase().includes(qName));
+    if (qId) r = r.filter((p) => (p.identificacion ?? "").includes(qId));
+    if (filters.posicion) r = r.filter((p) => (p.posicion ?? "") === filters.posicion);
+    if (filters.edad) {
+      const n = Number.parseInt(filters.edad, 10);
+      if (!Number.isNaN(n)) r = r.filter((p) => Number(p.edad) === n);
     }
-  };
+    if (filters.genero) r = r.filter((p) => (p.genero ?? "") === filters.genero);
+    if (filters.semestre) {
+      r = r.filter((p) => typeof p.semestre === "string" && p.semestre.trim() !== "" && p.semestre === filters.semestre);
+    }
+    if (filters.onlyAvailable) r = r.filter((p) => Boolean(p.disponibilidad));
 
-  const hasActiveFilters = filters.nombre || filters.identificacion || filters.posicion || filters.edad || filters.genero || filters.semestre || filters.onlyAvailable;
+    r.sort((a, b) => ((a.nombre ?? "") as string).localeCompare((b.nombre ?? "") as string));
+    return r as PlayerDto[];
+  }, [players, debouncedName, filters]);
+
+  const hasActiveFilters = Boolean(
+    filters.nombre || filters.identificacion || filters.posicion || filters.edad || filters.genero || filters.semestre || filters.onlyAvailable
+  );
 
   const inputStyle = {
     borderColor: "rgba(0,0,0,0.12)",
@@ -233,7 +328,6 @@ export default function PlayerSearch() {
 
   return (
     <div className="min-h-screen pb-28 lg:pb-0" style={{ backgroundColor: P.bg }}>
-
       {/* ── Header ── */}
       <motion.header
         initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.4, ease: "easeOut" }}
@@ -261,7 +355,6 @@ export default function PlayerSearch() {
       </motion.header>
 
       <main className="max-w-5xl mx-auto px-6 sm:px-10 pt-8 pb-16">
-
         {/* ── Title ── */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06, duration: 0.45 }} className="mb-6">
           <div className="flex items-center gap-2 mb-1">
@@ -274,7 +367,13 @@ export default function PlayerSearch() {
             Filtra por posición, edad, género, nombre o semestre. Presiona{" "}
             <kbd className="px-1.5 py-0.5 rounded-md text-xs font-mono" style={{ backgroundColor: "rgba(0,0,0,0.08)", color: P.textPrimary }}>/</kbd>{" "}
             para enfocar la búsqueda.
+            {usingMock && <span style={{ marginLeft: 8, color: P.secondary, fontWeight: 700 }}> (modo mock)</span>}
           </p>
+          {apiError && (
+            <div className="mt-2 text-sm" style={{ color: P.primary, fontWeight: 700 }}>
+              {apiError}
+            </div>
+          )}
         </motion.div>
 
         {/* ── Filters ── */}
@@ -283,9 +382,7 @@ export default function PlayerSearch() {
           className="bg-white rounded-[20px] p-5 mb-6"
           style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04)" }}
         >
-          {/* Main row */}
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Name */}
             <div className="flex-1">
               <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Nombre</label>
               <div className="relative">
@@ -301,7 +398,6 @@ export default function PlayerSearch() {
               </div>
             </div>
 
-            {/* Position */}
             <div className="w-full sm:w-44">
               <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Posición</label>
               <select value={filters.posicion} onChange={(e) => update("posicion", e.target.value)} className="w-full border rounded-xl px-3 py-2.5 outline-none" style={inputStyle}>
@@ -313,7 +409,6 @@ export default function PlayerSearch() {
               </select>
             </div>
 
-            {/* Toggles + actions */}
             <div className="flex items-end gap-2 flex-wrap">
               <label className="flex items-center gap-1.5 cursor-pointer h-[42px]">
                 <div
@@ -350,7 +445,6 @@ export default function PlayerSearch() {
             </div>
           </div>
 
-          {/* Advanced */}
           <AnimatePresence>
             {showAdvanced && (
               <motion.div
@@ -361,11 +455,22 @@ export default function PlayerSearch() {
                 <div className="mt-4 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Identificación</label>
-                    <input value={filters.identificacion} onChange={(e) => update("identificacion", e.target.value)} placeholder="Ej: 1234567890" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
+                    <input
+                      value={filters.identificacion}
+                      onChange={(e) => update("identificacion", e.target.value)}
+                      placeholder="Ej: 1234567890"
+                      className="w-full border rounded-xl px-3 py-2 outline-none"
+                      style={inputStyle}
+                    />
+                    {idError && (
+                      <p className="text-xs mt-1" style={{ color: P.primary, fontWeight: 700 }}>
+                        {idError}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Género</label>
-                    <select value={filters.genero} onChange={(e) => update("genero", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
+                    <select value={filters.genero} onChange={(e) => update("genero", e.target.value)} className="w-full mt-1 border rounded-xl px-3 py-2 text-sm" style={inputStyle}>
                       <option value="">Todos</option>
                       <option value="masculino">Masculino</option>
                       <option value="femenino">Femenino</option>
@@ -383,7 +488,21 @@ export default function PlayerSearch() {
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Edad</label>
-                    <input type="number" min="16" max="99" value={filters.edad} onChange={(e) => update("edad", e.target.value)} placeholder="Ej: 20" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
+                    <input
+                      type="number"
+                      min={16}
+                      max={99}
+                      value={filters.edad}
+                      onChange={(e) => update("edad", e.target.value)}
+                      placeholder="Ej: 20"
+                      className="w-full border rounded-xl px-3 py-2 outline-none"
+                      style={inputStyle}
+                    />
+                    {ageError && (
+                      <p className="text-xs mt-1" style={{ color: P.primary, fontWeight: 700 }}>
+                        {ageError}
+                      </p>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -418,12 +537,7 @@ export default function PlayerSearch() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {results.map((player, idx) => (
               <motion.div key={player.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.06, duration: 0.35 }}>
-                <PlayerCard
-                  player={player}
-                  query={debouncedName}
-                  onInvite={handleInvite}
-                  invited={invited.has(player.id)}
-                />
+                <PlayerCard player={player} query={debouncedName} />
               </motion.div>
             ))}
           </div>
@@ -447,6 +561,7 @@ export default function PlayerSearch() {
           >
             <Check style={{ width: 18, height: 18 }} />
             <span className="text-sm whitespace-nowrap" style={{ fontWeight: 700 }}>{toast}</span>
+            <button onClick={() => setToast(null)} className="ml-3 text-xs underline">Cerrar</button>
           </motion.div>
         )}
       </AnimatePresence>
