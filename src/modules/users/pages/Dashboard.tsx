@@ -116,6 +116,11 @@ interface TeamScheduleItem {
   hour: string;
 }
 
+interface PendingInviteDraft {
+  email: string;
+  jerseyNumber: number;
+}
+
 interface TeamMemberStats {
   id: number;
   name: string;
@@ -150,9 +155,13 @@ const TEAM_CONTEXT_STORAGE_KEY = "techcup.teamContext";
 const TEAM_NOTIFS_STORAGE_KEY = "techcup.teamNotifications";
 
 interface StoredTeamContext {
+  teamId?: number;
   roleInTeam?: RoleType;
   teamStatus?: TeamStatus;
   teamName?: string;
+  logoUrl?: string | null;
+  primaryColor?: string;
+  secondaryColor?: string;
   teamMembers?: TeamRosterMember[];
   joinedAt?: string | null;
   teamSchedule?: TeamScheduleItem[];
@@ -257,10 +266,11 @@ function NotifPanel({
 }
 
 // ── Payment Modal ─────────────────────────────────
-function PaymentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function PaymentModal({ onClose, onSuccess, teamId }: { onClose: () => void; onSuccess: () => void; teamId: number | null }) {
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [uploadError, setUploadError] = useState("");
   const acceptedFormats = ["image/png", "image/jpeg", "application/pdf"];
 
   const getIcon = () => {
@@ -283,10 +293,24 @@ function PaymentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
     setFileError("");
   };
 
-  const handleSend = () => {
-    if (!file) return;
+  const handleSend = async () => {
+    if (!file || !teamId) {
+      setUploadError(!teamId ? "No se encontró el equipo para subir el comprobante." : "Adjunta un archivo antes de enviar.");
+      return;
+    }
+
     setSending(true);
-    setTimeout(() => { setSending(false); onClose(); onSuccess(); }, 1800);
+    setUploadError("");
+
+    try {
+      await teamService.uploadPaymentProof(teamId, file);
+      onClose();
+      onSuccess();
+    } catch {
+      setUploadError("No se pudo enviar el comprobante. Inténtalo de nuevo.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -343,6 +367,7 @@ function PaymentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
                   {file ? "Cambiar comprobante" : "Adjuntar comprobante"}
                 </label>
                 {fileError && <p className="text-xs mt-2" style={{ color: P.primary, fontWeight: 600 }}>{fileError}</p>}
+                {uploadError && <p className="text-xs mt-2" style={{ color: P.primary, fontWeight: 600 }}>{uploadError}</p>}
               </div>
               <AnimatePresence>
                 {file && (
@@ -390,9 +415,11 @@ function PaymentModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: 
 function InscriptionModal({
   onClose,
   onSuccess,
+  accountId,
 }: {
   onClose: () => void;
-  onSuccess: (payload: { teamName: string; members: TeamRosterMember[] }) => void;
+  onSuccess: (payload: { teamId: number; teamName: string; pendingInvites: PendingInviteDraft[] }) => void;
+  accountId: number | null;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [teamName, setTeamName] = useState("");
@@ -404,6 +431,8 @@ function InscriptionModal({
   const [emailError, setEmailError] = useState("");
   const [memberError, setMemberError] = useState("");
   const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   const isInstitutionalEmail = (e: string) => /@[^\s@]*\.edu(\.[a-z]{2})?$/i.test(e);
@@ -458,17 +487,39 @@ function InscriptionModal({
     if (e.key === "Enter") { e.preventDefault(); handleAddInvite(); }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!accountId) {
+      setSubmitError("No se pudo identificar el capitán autenticado.");
+      return;
+    }
+
     const totalMembers = 1 + invited.length;
     if (totalMembers < 7) { setMemberError("El equipo debe tener mínimo 7 personas (incluyendo capitán)"); return; }
     if (totalMembers > 12) { setMemberError("El equipo no puede superar 12 personas"); return; }
     if (!Number.isInteger(captainNumber) || captainNumber < 0 || captainNumber > 99) { setMemberError("El dorsal del capitán debe estar entre 0 y 99"); return; }
-    const members: TeamRosterMember[] = [
-      { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
-      ...invited.map((member, index) => ({ id: index + 2, name: member.email.split("@")[0], email: member.email, role: member.role, jerseyNumber: member.jerseyNumber })),
-    ];
-    onClose();
-    onSuccess({ teamName: teamName.trim(), members });
+
+    setIsSubmitting(true);
+    setSubmitError("");
+
+    try {
+      const createdTeam = await teamService.create({
+        name: teamName.trim(),
+        captainId: accountId,
+        primaryColor: P.primary,
+        secondaryColor: P.secondary,
+      });
+
+      onClose();
+      onSuccess({
+        teamId: createdTeam.id,
+        teamName: createdTeam.name,
+        pendingInvites: invited.map((member) => ({ email: member.email, jerseyNumber: member.jerseyNumber })),
+      });
+    } catch {
+      setSubmitError("No se pudo crear el equipo. Verifica los datos e inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -643,10 +694,11 @@ function InscriptionModal({
 
                     <div className="flex gap-3 pt-2">
                       <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setStep(1)} className="flex-none px-5 py-3.5 rounded-2xl border border-black/8 text-sm" style={{ fontWeight: 600, color: "#6C757D" }}>← Atrás</motion.button>
-                      <motion.button whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.97 }} onClick={handleSubmit} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm" style={{ backgroundColor: P.primary, fontWeight: 700, boxShadow: `0 8px 24px ${P.primary}35` }}>
-                        <Send className="w-4 h-4" />Confirmar inscripción
+                      <motion.button whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.97 }} onClick={handleSubmit} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm" style={{ backgroundColor: isSubmitting ? "#E9ECEF" : P.primary, fontWeight: 700, boxShadow: isSubmitting ? "none" : `0 8px 24px ${P.primary}35`, color: isSubmitting ? P.default : "white", cursor: isSubmitting ? "not-allowed" : "pointer" }}>
+                        <Send className="w-4 h-4" />{isSubmitting ? "Creando equipo..." : "Confirmar inscripción"}
                       </motion.button>
                     </div>
+                    {submitError && <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{submitError}</p>}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -762,9 +814,13 @@ export default function Dashboard() {
   const [displayName, setDisplayName] = useState<string | null>(null);
 
   const [showInscription, setShowInscription] = useState(false);
+  const [teamId, setTeamId] = useState<number | null>(storedTeamContext?.teamId ?? null);
   const [roleInTeam, setRoleInTeam] = useState<RoleType | null>(storedTeamContext?.roleInTeam ?? null);
   const [teamStatus, setTeamStatus] = useState<TeamStatus>(storedTeamContext?.teamStatus ?? "draft");
   const [teamName, setTeamName] = useState(storedTeamContext?.teamName ?? "");
+  const [teamLogoUrl, setTeamLogoUrl] = useState<string | null>(storedTeamContext?.logoUrl ?? null);
+  const [teamPrimaryColor, setTeamPrimaryColor] = useState(storedTeamContext?.primaryColor ?? P.primary);
+  const [teamSecondaryColor, setTeamSecondaryColor] = useState(storedTeamContext?.secondaryColor ?? P.secondary);
   const [joinedAt, setJoinedAt] = useState<string | null>(storedTeamContext?.joinedAt ?? null);
   const [teamSchedule, setTeamSchedule] = useState<TeamScheduleItem[]>(storedTeamContext?.teamSchedule ?? []);
   const [teamMembers, setTeamMembers] = useState<TeamRosterMember[]>(storedTeamContext?.teamMembers ?? []);
@@ -795,22 +851,20 @@ export default function Dashboard() {
       })
       .catch(() => {});
 
-    // Fetch team only if not already in session cache
-    if (!storedTeamContext?.teamName) {
-      teamService.getMyTeam()
-        .then((t) => {
-          setRoleInTeam(t.roleInTeam);
-          setTeamStatus(t.teamStatus);
-          setTeamName(t.name);
-          setJoinedAt(t.joinedAt);
-          setTeamMembers(t.members.map((m) => ({ id: m.id, name: m.name, email: m.email, role: m.role, jerseyNumber: m.jerseyNumber })));
-          setTeamSchedule(t.schedule);
-        })
-        .catch(() => {});
-    }
+    teamService.getMyTeam()
+      .then((team) => {
+        setTeamId(team.id);
+        setRoleInTeam(accountId === team.captainId ? "capitan" : "jugador");
+        setTeamStatus(team.teamStatus);
+        setTeamName(team.name);
+        setTeamLogoUrl(team.logoUrl ?? null);
+        setTeamPrimaryColor(team.primaryColor ?? P.primary);
+        setTeamSecondaryColor(team.secondaryColor ?? P.secondary);
+      })
+      .catch(() => {});
   }, [accountId]);
 
-  const isRegistered = Boolean(roleInTeam && teamName);
+  const isRegistered = Boolean(teamId);
   const hasUploadedPayment = notifs.some((n) => n.type === "payment" && n.status === "uploaded");
   const unreadCount = notifs.filter((n) => !n.read).length;
   const teamPerformance = isRegistered && teamMembers.length > 0 ? createTeamPerformance(teamMembers) : null;
@@ -818,8 +872,19 @@ export default function Dashboard() {
   const persistTeamContext = (nextContext: StoredTeamContext) => writeUICache(TEAM_CONTEXT_STORAGE_KEY, nextContext);
 
   useEffect(() => {
-    persistTeamContext({ roleInTeam: roleInTeam ?? undefined, teamStatus, teamName, teamMembers, joinedAt, teamSchedule });
-  }, [roleInTeam, teamStatus, teamName, teamMembers, joinedAt, teamSchedule]);
+    persistTeamContext({
+      teamId: teamId ?? undefined,
+      roleInTeam: roleInTeam ?? undefined,
+      teamStatus,
+      teamName,
+      logoUrl: teamLogoUrl,
+      primaryColor: teamPrimaryColor,
+      secondaryColor: teamSecondaryColor,
+      teamMembers,
+      joinedAt,
+      teamSchedule,
+    });
+  }, [teamId, roleInTeam, teamStatus, teamName, teamLogoUrl, teamPrimaryColor, teamSecondaryColor, teamMembers, joinedAt, teamSchedule]);
 
   useEffect(() => { writeUICache(TEAM_NOTIFS_STORAGE_KEY, notifs); }, [notifs]);
 
@@ -928,6 +993,7 @@ export default function Dashboard() {
       <AnimatePresence>
         {selectedNotif && (
           <PaymentModal
+            teamId={teamId}
             onClose={() => setSelectedNotif(null)}
             onSuccess={() => {
               setNotifs((prev) => prev.map((n) => n.id === selectedNotif!.id ? { ...n, status: "uploaded", read: true } : n));
@@ -943,16 +1009,44 @@ export default function Dashboard() {
       <AnimatePresence>
         {showInscription && (
           <InscriptionModal
+            accountId={accountId}
             onClose={() => setShowInscription(false)}
-            onSuccess={({ teamName: createdTeamName, members }) => {
+            onSuccess={({ teamId: createdTeamId, teamName: createdTeamName, pendingInvites }) => {
+              setTeamId(createdTeamId);
               setRoleInTeam("capitan");
               setTeamStatus("pending-payment");
               setTeamName(createdTeamName);
-              setTeamMembers(members);
+              setTeamLogoUrl(null);
+              setTeamPrimaryColor(P.primary);
+              setTeamSecondaryColor(P.secondary);
               setJoinedAt(new Date().toISOString().split("T")[0]);
               setTeamSchedule(createTeamSchedule(createdTeamName));
               ensurePaymentNotification();
-              showToast("¡Equipo inscrito exitosamente en TECHCUP!", P.success);
+              persistTeamContext({
+                teamId: createdTeamId,
+                roleInTeam: "capitan",
+                teamStatus: "pending-payment",
+                teamName: createdTeamName,
+                logoUrl: null,
+                primaryColor: P.primary,
+                secondaryColor: P.secondary,
+                teamMembers,
+                joinedAt: new Date().toISOString().split("T")[0],
+                teamSchedule: createTeamSchedule(createdTeamName),
+              });
+              navigate("/dashboard/team-setup", {
+                state: {
+                  teamId: createdTeamId,
+                  teamName: createdTeamName,
+                  roleInTeam: "capitan",
+                  teamStatus: "pending-payment",
+                  primaryColor: P.primary,
+                  secondaryColor: P.secondary,
+                  logoUrl: null,
+                  pendingInvites,
+                },
+              });
+              showToast("¡Equipo creado correctamente!", P.success);
             }}
           />
         )}
