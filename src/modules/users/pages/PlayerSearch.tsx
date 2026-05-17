@@ -1,9 +1,10 @@
 // src/modules/users/pages/PlayerSearch.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import logoTechcup from "@/assets/logo.png";
 import { playerService, type PlayerDto } from "@/modules/users/services/playerService";
+import { teamService } from "@/modules/teams/services/teamService";
 import {
   ArrowLeft,
   Search,
@@ -142,7 +143,9 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
 // ── PlayerSearch ──────────────────────────────────
 export default function PlayerSearch() {
   const navigate = useNavigate();
+  const location = useLocation();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
+  const teamContext = (location.state as { teamId?: number; teamName?: string } | null) ?? null;
 
   const [filters, setFilters] = useState({
     nombre: "", identificacion: "", posicion: "", edad: "", genero: "", semestre: "", onlyAvailable: false,
@@ -214,9 +217,13 @@ export default function PlayerSearch() {
   const handleInvite = async (id: string) => {
     const p = players.find((x) => x.id === id);
     try {
-      await playerService.invite(id);
+      if (teamContext?.teamId) {
+        await teamService.inviteMember(teamContext.teamId, { teamId: teamContext.teamId, playerId: Number(id) });
+      } else {
+        await playerService.invite(id);
+      }
       setInvited((prev) => new Set([...prev, id]));
-      if (p) setToast(`Invitación enviada a ${p.nombre}`);
+      if (p) setToast(teamContext?.teamId ? `Invitación enviada a ${p.nombre} para ${teamContext.teamName ?? "tu equipo"}` : `Invitación enviada a ${p.nombre}`);
     } catch {
       setToast("No se pudo enviar la invitación.");
     }
