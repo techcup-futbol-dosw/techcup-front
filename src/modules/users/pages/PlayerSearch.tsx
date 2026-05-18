@@ -34,7 +34,7 @@ interface LocalPlayer {
   edad: number;
   genero: "masculino" | "femenino" | "otro";
   posicion: string;
-  semestre: string; // "" indica que NO es estudiante / no aplica
+  semestre: string;
   foto: string | null;
   dorsal: string;
   disponibilidad: boolean;
@@ -46,7 +46,6 @@ const JUGADORES_MOCK: LocalPlayer[] = [
   { id: "2", nombre: "Ana García", identificacion: "0987654321", edad: 20, genero: "femenino", posicion: "volante", semestre: "6", foto: null, dorsal: "8", disponibilidad: false, email: "ana.garcia@universidad.edu" },
   { id: "3", nombre: "Juan Pérez", identificacion: "1122334455", edad: 22, genero: "masculino", posicion: "defensa", semestre: "7", foto: null, dorsal: "4", disponibilidad: true, email: "juan.perez@universidad.edu" },
   { id: "4", nombre: "María López", identificacion: "5544332211", edad: 19, genero: "femenino", posicion: "portero", semestre: "4", foto: null, dorsal: "1", disponibilidad: true, email: "maria.lopez@universidad.edu" },
-  // Ejemplo: este jugador NO es estudiante -> semestre vacío
   { id: "5", nombre: "Diego Ramírez", identificacion: "9988776655", edad: 23, genero: "masculino", posicion: "volante", semestre: "", foto: null, dorsal: "6", disponibilidad: false, email: "diego.ramirez@empresa.com" },
 ];
 
@@ -77,13 +76,10 @@ function highlight(text: string, query: string) {
   );
 }
 
-// Retornado por petición del diseño: color de borde según disponibilidad.
-// Ahora se usa dentro de PlayerCard para evitar TS6133.
 function availabilityBorderColor(available: boolean): string {
   return available ? "#17C964" : "#B81C1C";
 }
 
-// Valida edad: debe ser vacío (sin filtro) o número entero entre 16 y 99
 function validateAgeInput(ageStr: string): string | null {
   const trimmed = ageStr.trim();
   if (trimmed === "") return null;
@@ -95,7 +91,6 @@ function validateAgeInput(ageStr: string): string | null {
   return null;
 }
 
-// Valida identificación: vacío o dígitos únicamente
 function validateIdInput(idStr: string): string | null {
   const trimmed = idStr.trim();
   if (trimmed === "") return null;
@@ -110,7 +105,6 @@ function PlayerCard({ player, query }: { player: PlayerDto; query: string }) {
   const avail = Boolean(p.disponibilidad);
   const hasSemestre = typeof p.semestre === "string" && p.semestre.trim() !== "";
 
-  // Usamos availabilityBorderColor para el borde (soluciona TS6133)
   const borderColor = availabilityBorderColor(avail);
 
   return (
@@ -125,9 +119,7 @@ function PlayerCard({ player, query }: { player: PlayerDto; query: string }) {
         boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Top row */}
       <div className="flex items-start gap-3">
-        {/* Dorsal avatar */}
         <div
           className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-xl"
           style={{ background: `linear-gradient(135deg, ${P.primary}, ${P.secondary})`, fontWeight: 800 }}
@@ -167,7 +159,6 @@ function PlayerCard({ player, query }: { player: PlayerDto; query: string }) {
         </div>
       </div>
 
-      {/* Info */}
       <div className="rounded-xl px-3 py-2.5 space-y-0.5" style={{ backgroundColor: P.bg }}>
         <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>
           ID: <span style={{ color: P.textPrimary }}>{p.identificacion ?? "—"}</span>
@@ -176,8 +167,6 @@ function PlayerCard({ player, query }: { player: PlayerDto; query: string }) {
           <span style={{ color: P.textPrimary }}>{p.email ?? "—"}</span>
         </p>
       </div>
-
-      {/* Nota: botón de invitar eliminado intencionalmente */}
     </motion.article>
   );
 }
@@ -200,25 +189,49 @@ export default function PlayerSearch() {
   const [usingMock, setUsingMock] = useState(false);
 
   const [debouncedName, setDebouncedName] = useState(filters.nombre);
+
+  // Debounce: actualiza debouncedName 350ms después de que cambie filters.nombre
   useEffect(() => {
     const t = setTimeout(() => setDebouncedName(filters.nombre), 350);
     return () => clearTimeout(t);
   }, [filters.nombre]);
 
-  // Valida edad cada vez que cambia el filtro de edad
+  // Listener robusto para el atajo "/"
+  useEffect(() => {
+    const isEditable = (el: Element | null) => {
+      if (!el) return false;
+      const tag = el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return true;
+      const attr = (el as HTMLElement).getAttribute?.("contenteditable");
+      if (attr === "true") return true;
+      return false;
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "/") {
+        const active = document.activeElement;
+        if (isEditable(active)) return;
+        e.preventDefault();
+        nameInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   useEffect(() => {
     const err = validateAgeInput(filters.edad);
     setAgeError(err);
   }, [filters.edad]);
 
-  // Valida identificación cada vez que cambia el filtro de identificación
   useEffect(() => {
     const err = validateIdInput(filters.identificacion);
     setIdError(err);
   }, [filters.identificacion]);
 
   const fetchPlayers = useCallback(async () => {
-    // Si la edad o la identificación son inválidas, no intentamos buscar y mostramos error
     const ageValidation = validateAgeInput(filters.edad);
     const idValidation = validateIdInput(filters.identificacion);
 
@@ -260,17 +273,6 @@ export default function PlayerSearch() {
   }, [debouncedName, filters.posicion, filters.genero, filters.semestre, filters.edad, filters.identificacion, filters.onlyAvailable]);
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && (document.activeElement as HTMLElement)?.tagName !== "INPUT") {
-        e.preventDefault();
-        nameInputRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -328,7 +330,6 @@ export default function PlayerSearch() {
 
   return (
     <div className="min-h-screen pb-28 lg:pb-0" style={{ backgroundColor: P.bg }}>
-      {/* ── Header ── */}
       <motion.header
         initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.4, ease: "easeOut" }}
         className="sticky top-0 z-40 border-b px-6"
@@ -355,7 +356,6 @@ export default function PlayerSearch() {
       </motion.header>
 
       <main className="max-w-5xl mx-auto px-6 sm:px-10 pt-8 pb-16">
-        {/* ── Title ── */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06, duration: 0.45 }} className="mb-6">
           <div className="flex items-center gap-2 mb-1">
             <Search style={{ width: 20, height: 20, color: P.primary }} />
@@ -364,9 +364,16 @@ export default function PlayerSearch() {
             </h1>
           </div>
           <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>
-            Filtra por posición, edad, género, nombre o semestre. Presiona{" "} corregir***
-            <kbd className="px-1.5 py-0.5 rounded-md text-xs font-mono" style={{ backgroundColor: "rgba(0,0,0,0.08)", color: P.textPrimary }}>/</kbd>{" "}
-            para enfocar la búsqueda.
+            Filtra por posición, edad, género, nombre o semestre. Pulsa{" "}
+            <kbd
+              className="px-1.5 py-0.5 rounded-md text-xs font-mono"
+              aria-label="tecla barra"
+              title="Atajo: /"
+              style={{ backgroundColor: "rgba(0,0,0,0.08)", color: P.textPrimary }}
+            >
+              /
+            </kbd>{" "}
+            para enfocar rápidamente el campo de Nombre.
             {usingMock && <span style={{ marginLeft: 8, color: P.secondary, fontWeight: 700 }}> (modo mock)</span>}
           </p>
           {apiError && (
@@ -376,7 +383,6 @@ export default function PlayerSearch() {
           )}
         </motion.div>
 
-        {/* ── Filters ── */}
         <motion.section
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.45 }}
           className="bg-white rounded-[20px] p-5 mb-6"
@@ -510,7 +516,6 @@ export default function PlayerSearch() {
           </AnimatePresence>
         </motion.section>
 
-        {/* ── Results header ── */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="flex items-center justify-between mb-4">
           <p className="text-sm" style={{ color: P.default, fontWeight: 600 }}>
             {loading ? (
@@ -523,7 +528,6 @@ export default function PlayerSearch() {
           {loading && <Loader2 style={{ width: 16, height: 16, color: P.secondary, animation: "spin 1s linear infinite" }} />}
         </motion.div>
 
-        {/* ── Grid ── */}
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 style={{ width: 32, height: 32, color: P.primary, animation: "spin 1s linear infinite" }} />
@@ -550,7 +554,6 @@ export default function PlayerSearch() {
         )}
       </main>
 
-      {/* ── Toast ── */}
       <AnimatePresence>
         {toast && (
           <motion.div
