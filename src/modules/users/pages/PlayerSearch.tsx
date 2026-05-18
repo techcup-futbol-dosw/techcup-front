@@ -364,7 +364,7 @@ export default function PlayerSearch() {
             </h1>
           </div>
           <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>
-            Filtra por posición, edad, género, nombre o semestre. Presiona{" "}
+            Filtra por posición, edad, género, nombre o semestre. Presiona{" "} corregir***
             <kbd className="px-1.5 py-0.5 rounded-md text-xs font-mono" style={{ backgroundColor: "rgba(0,0,0,0.08)", color: P.textPrimary }}>/</kbd>{" "}
             para enfocar la búsqueda.
             {usingMock && <span style={{ marginLeft: 8, color: P.secondary, fontWeight: 700 }}> (modo mock)</span>}
