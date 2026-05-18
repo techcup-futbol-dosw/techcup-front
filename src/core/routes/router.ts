@@ -18,7 +18,6 @@ import { Profile } from "@/modules/users/pages/Profile";
 import { SportsProfile } from "@/modules/users/pages/SportsProfile";
 import PlayerSearch from "@/modules/users/pages/PlayerSearch";
 import PendingInvitations from "@/modules/users/pages/PendingInvitations";
-import Audit from "@/modules/users/pages/Audit";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -55,7 +54,6 @@ export const router = createBrowserRouter([
       { path: "profile", Component: Profile },
       { path: "player-search", Component: PlayerSearch },
       { path: "pending-invitations", Component: PendingInvitations },
-      { path: "audit-players", Component: Audit },
       { path: "matches", Component: Matches },
       { path: "schedule", Component: Schedule },
       { path: "scores", Component: Scores },

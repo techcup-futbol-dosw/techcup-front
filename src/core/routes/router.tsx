@@ -71,7 +71,7 @@ export const router = createBrowserRouter([
           { path: "schedule", Component: Schedule },
           { path: "scores", Component: Scores },
           { path: "tournament", Component: Tournament },
-            { path: "pending-invitations", Component: PendingInvitations },
+          { path: "pending-invitations", Component: PendingInvitations },
         ],
       },
     ],
