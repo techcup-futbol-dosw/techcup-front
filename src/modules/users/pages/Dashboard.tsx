@@ -342,7 +342,7 @@ function PaymentModal({ onClose, onSuccess, teamId }: { onClose: () => void; onS
               </div>
               <div className="p-4 rounded-2xl mb-5 border" style={{ backgroundColor: `${P.info}08`, borderColor: `${P.info}22` }}>
                 <p className="text-sm leading-relaxed" style={{ color: "#1A1A2E", fontWeight: 500 }}>
-                  👋 ¡Bienvenido al torneo! Acá puedes subir tu <span style={{ fontWeight: 700 }}>comprobante de pago</span> para confirmar tu participación en TECHCUP 2026.
+                  👋 ¡Bienvenido al torneo techcup! Acá puedes subir tu <span style={{ fontWeight: 700 }}>comprobante de pago</span> para confirmar tu participación en TECHCUP 2026.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 mb-5">
