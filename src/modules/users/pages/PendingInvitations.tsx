@@ -1,5 +1,9 @@
 // src/modules/users/pages/InvitacionesPendientes.tsx
 import { useState } from "react";
+import { motion } from "motion/react";
+import { useNavigate } from "react-router";
+import { ArrowLeft, Bell } from "lucide-react";
+import { LogoutAction } from "@/core/components/LogoutAction";
 
 interface Invitation {
   id: string;
@@ -41,6 +45,11 @@ const INVITACIONES_MOCK: Invitation[] = [
   },
 ];
 
+const P = {
+  primary: "#B81C1C",
+  default: "#6E6E73",
+};
+
 function getInvitationBadgeColor(
   tipo: "equipo" | "torneo",
 ): { bg: string; text: string } {
@@ -55,6 +64,7 @@ function getInvitationLabel(tipo: "equipo" | "torneo"): string {
 }
 
 export default function PendingInvitations() {
+  const navigate = useNavigate();
   const [invitations, setInvitations] = useState<Invitation[]>(INVITACIONES_MOCK);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -82,6 +92,50 @@ export default function PendingInvitations() {
 
   return (
     <div className="relative min-h-screen overflow-auto bg-[#f8f9fa]">
+      <motion.header
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
+        className="sticky top-0 z-40 border-b px-6"
+        style={{
+          background: "rgba(242,242,247,0.88)",
+          borderColor: "rgba(0,0,0,0.06)",
+          backdropFilter: "saturate(180%) blur(20px)",
+          WebkitBackdropFilter: "saturate(180%) blur(20px)",
+        }}
+      >
+        <div className="max-w-4xl mx-auto flex items-center justify-between h-[60px]">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+              style={{ backgroundColor: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
+              aria-label="Volver"
+            >
+              <ArrowLeft style={{ width: 16, height: 16, color: P.default }} />
+            </button>
+            <span style={{ fontWeight: 800, color: P.primary, fontSize: "1.05rem", letterSpacing: "-0.02em" }}>
+              TECHCUP
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: `${P.primary}12` }}>
+              <Bell style={{ width: 14, height: 14, color: P.primary }} />
+              <span style={{ fontSize: "0.78rem", fontWeight: 700, color: P.primary }}>Invitaciones</span>
+            </div>
+            <LogoutAction
+              accentColor={P.primary}
+              iconColor={P.default}
+              buttonAriaLabel="Cerrar sesión"
+              title="¿Cerrar sesión?"
+              message="Tu sesión en TECHCUP se cerrará. Podrás volver a ingresar cuando quieras."
+              cancelLabel="Cancelar"
+              confirmLabel="Cerrar sesión"
+            />
+          </div>
+        </div>
+      </motion.header>
       <div className="flex items-start justify-center px-6 lg:px-20 py-12 lg:py-20">
         <div className="w-full max-w-4xl">
           {invitations.length > 0 ? (

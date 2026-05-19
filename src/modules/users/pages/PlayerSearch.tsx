@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
 import logoTechcup from "@/assets/logo.png";
 import { playerService, type PlayerDto } from "@/modules/users/services/playerService";
+import { LogoutAction } from "@/core/components/LogoutAction";
 import {
   ArrowLeft,
   Search,
@@ -351,7 +352,17 @@ export default function PlayerSearch() {
             <span style={{ fontWeight: 800, color: P.primary, fontSize: "1rem", letterSpacing: "-0.03em" }}>TECHCUP</span>
           </div>
 
-          <div style={{ width: 70 }} />
+          <div className="flex items-center justify-end" style={{ width: 70 }}>
+            <LogoutAction
+              accentColor={P.primary}
+              iconColor={P.default}
+              buttonAriaLabel="Cerrar sesión"
+              title="¿Cerrar sesión?"
+              message="Tu sesión en TECHCUP se cerrará. Podrás volver a ingresar cuando quieras."
+              cancelLabel="Cancelar"
+              confirmLabel="Cerrar sesión"
+            />
+          </div>
         </div>
       </motion.header>
 
