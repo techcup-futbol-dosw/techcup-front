@@ -4,3 +4,4 @@ dist
 .claude
 .env.local
 .env*.local
+.env
