@@ -1102,7 +1102,7 @@ export default function Dashboard() {
               <span style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.18em", color: USER_ACCENT, textTransform: "uppercase" }}>Panel Principal · TECHCUP 2026</span>
             </div>
             <h1 className="text-white mb-2.5" style={{ fontSize: "clamp(1.6rem, 4.5vw, 2.3rem)", fontWeight: 800, lineHeight: 1.13, letterSpacing: "-0.03em" }}>
-              ¡Bienvenido al torneo! 👋
+              ¡Bienvenido al torneo techcup! 👋
             </h1>
             <p style={{ color: "rgba(255,255,255,0.55)", fontWeight: 400, fontSize: "0.92rem", lineHeight: 1.7, maxWidth: "32ch" }}>
               Explora partidos, posiciones y toda la información del torneo desde aquí.
