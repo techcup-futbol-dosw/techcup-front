@@ -7,6 +7,8 @@ import { useNavigate } from "react-router";
 import { useState, useEffect, useRef, SyntheticEvent } from "react";
 import { ArrowLeft, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import logoTechcup from "@/assets/logo.png";
+import { useAuth } from "@/core/auth/AuthContext";
+import { sportProfileService } from "@/modules/users/services/sportProfileService";
 
 interface SportsProfileData {
   posicion: string;
@@ -21,10 +23,10 @@ interface ValidationResult {
 }
 
 const POSICIONES = [
-  { id: "portero", nombre: "Portero" },
-  { id: "defensa", nombre: "Defensa" },
-  { id: "volante", nombre: "Volante" },
-  { id: "delantero", nombre: "Delantero" },
+  { id: "GOALKEEPER", nombre: "Portero" },
+  { id: "DEFENDER",   nombre: "Defensa" },
+  { id: "MIDFIELDER", nombre: "Volante" },
+  { id: "FORWARD",    nombre: "Delantero" },
 ];
 
 const P = {
@@ -282,6 +284,7 @@ function validateFormLogic(
 
 export function SportsProfile() {
   const navigate = useNavigate();
+  const { accountId } = useAuth();
   const userContext = getUserContext();
   const dashboardPath = getDashboardPath(userContext);
 
@@ -291,6 +294,8 @@ export function SportsProfile() {
     foto: null,
     disponible: true,
   });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [existingProfileId, setExistingProfileId] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<"success" | "error">("success");
@@ -298,6 +303,21 @@ export function SportsProfile() {
   const [isSaving, setIsSaving] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const toastRef = useRef<HTMLDivElement | null>(null);
+
+  // Load existing sport profile on mount
+  useEffect(() => {
+    if (!accountId) return;
+    sportProfileService.getByUserId(accountId).then((profile) => {
+      if (!profile) return;
+      setExistingProfileId(profile.id);
+      setProfileData({
+        posicion: profile.position,
+        dorsal: profile.dorsalNumber != null ? String(profile.dorsalNumber).padStart(2, "0") : "",
+        foto: null,
+        disponible: profile.available,
+      });
+    });
+  }, [accountId]);
 
   useEffect(() => {
     if (feedbackMessage && toastRef.current) {
@@ -320,6 +340,7 @@ export function SportsProfile() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setPhotoFile(file);
     handleImageUploadLogic(file, errors, setErrors, setProfileData, setPreviewImage, showFeedback);
   };
 
@@ -352,6 +373,7 @@ export function SportsProfile() {
   const handleReset = () => {
     setProfileData({ posicion: "", dorsal: "", foto: null, disponible: true });
     setPreviewImage(null);
+    setPhotoFile(null);
     setErrors({});
     setTouched({});
     showFeedback("Cambios descartados", "success");
@@ -363,12 +385,33 @@ export function SportsProfile() {
       showFeedback("Completa los datos requeridos antes de guardar", "error");
       return;
     }
+    if (!accountId) {
+      showFeedback("No se pudo identificar tu sesión. Vuelve a iniciar sesión.", "error");
+      return;
+    }
 
     setIsSaving(true);
-    await new Promise((r) => globalThis.setTimeout(r, 1100));
-    setIsSaving(false);
-    showFeedback("¡Perfil deportivo guardado exitosamente!", "success");
-    globalThis.setTimeout(() => navigate(dashboardPath), 1600);
+    try {
+      const payload = {
+        position:     profileData.posicion,
+        dorsalNumber: Number.parseInt(profileData.dorsal, 10),
+        available:    profileData.disponible,
+      };
+
+      if (existingProfileId) {
+        await sportProfileService.update(existingProfileId, payload, photoFile ?? undefined);
+      } else {
+        const created = await sportProfileService.create(accountId, payload, photoFile ?? undefined);
+        setExistingProfileId(created.id);
+      }
+
+      showFeedback("¡Perfil deportivo guardado exitosamente!", "success");
+      globalThis.setTimeout(() => navigate(dashboardPath), 1600);
+    } catch {
+      showFeedback("No se pudo guardar el perfil. Intenta nuevamente.", "error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // ─── COMPUTED VALUES ───
