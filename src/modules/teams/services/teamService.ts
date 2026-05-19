@@ -1,11 +1,19 @@
 import { http } from "@/core/api/http";
 
 export type TeamMemberDto = {
+    // Backend fields (align with TeamMemberDTO.java)
     id: number;
-    name: string;
-    email: string;
-    role: "Capitán" | "Jugador";
-    jerseyNumber: number;
+    teamId?: number;
+    memberRole?: "capitan" | "jugador" | string; // canonical role value for backend
+    playerId?: number;
+    dorsal?: number;
+    active?: boolean;
+
+    // UI convenience fields (optional)
+    name?: string;
+    email?: string;
+    role?: "Capitán" | "Jugador"; // display label
+    jerseyNumber?: number; // display alias for dorsal
 };
 
 export type TeamScheduleItemDto = {
@@ -30,17 +38,25 @@ export type MyTeamDto = {
     schedule: TeamScheduleItemDto[];
     primaryColor?: string;
     secondaryColor?: string;
+    logoUrl?: string | null;
+    captainId?: number;
 };
 
 export type CreateTeamRequest = {
     name: string;
-    captainDorsal: number;
-    invitedEmails: string[];
+    // backend may accept either a captain id or a dorsal; include both optionally
+    captainDorsal?: number;
+    captainId?: number;
+    invitedEmails?: string[];
 };
 
 export type InviteMemberRequest = {
-    email: string;
-    jerseyNumber: number;
+    // Align with InviteDTO.java: send playerId (and optional teamId)
+    playerId: number;
+    teamId?: number;
+    // legacy/email-based invite fields (not sent to backend by default)
+    email?: string;
+    jerseyNumber?: number;
 };
 
 export type UploadPaymentRequest = {

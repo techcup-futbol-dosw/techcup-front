@@ -55,7 +55,7 @@ function highlight(text: string, query: string) {
 }
 
 // ── PlayerCard ────────────────────────────────────
-function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; query: string; onInvite: (id: string) => void; invited: boolean }) {
+function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; query: string; onInvite: (id: number) => void; invited: boolean }) {
   const pos = positionMeta[player.posicion] ?? { label: player.posicion, bg: `${P.default}14`, color: P.default };
   const avail = player.disponibilidad;
 
@@ -154,7 +154,7 @@ export default function PlayerSearch() {
   const [players, setPlayers] = useState<PlayerDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [invited, setInvited] = useState<Set<string>>(new Set());
+  const [invited, setInvited] = useState<Set<number>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
 
   const [debouncedName, setDebouncedName] = useState(filters.nombre);
@@ -214,11 +214,11 @@ export default function PlayerSearch() {
     setShowAdvanced(false);
   };
 
-  const handleInvite = async (id: string) => {
+  const handleInvite = async (id: number) => {
     const p = players.find((x) => x.id === id);
     try {
       if (teamContext?.teamId) {
-        await teamService.inviteMember(teamContext.teamId, { teamId: teamContext.teamId, playerId: Number(id) });
+        await teamService.inviteMember(teamContext.teamId, { teamId: teamContext.teamId, playerId: id });
       } else {
         await playerService.invite(id);
       }
