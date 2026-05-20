@@ -8,6 +8,8 @@ import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
 import logoTechcup from "@/assets/logo.png";
 import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
+import { loadMatchesIntoCache, loadStandingsIntoCache } from "@/core/services/competitionsService";
+import { tournamentService } from "@/modules/tournament/services/tournamentService";
 import {
   User,
   Swords,
@@ -1286,6 +1288,19 @@ export function Dashboard() {
   const [selectedNotif, setSelectedNotif] = useState<Notification | null>(null);
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tournamentService.list()
+      .then((tournaments) => {
+        const active = tournaments.find(
+          (t) => t.status === "in_progress" || t.status === "active"
+        );
+        if (!active) return;
+        const id = String(active.id);
+        loadMatchesIntoCache(id).catch(() => {});
+        loadStandingsIntoCache(id).catch(() => {});
+      })
+      .catch(() => {});
+  }, []);
 
   // Inscription
   const [showInscription, setShowInscription] = useState(false);
