@@ -95,11 +95,11 @@ type NotifStatus = "pending" | "uploaded";
 
 interface Notification {
   id: number;
-  type: "payment";
+  type: "team" | "match" | "payment" | "info";
   team: string;
   captain: string;
   time: string;
-  status: NotifStatus;
+  status?: NotifStatus;
   read: boolean;
 }
 
@@ -138,7 +138,7 @@ interface TeamRosterMember {
 }
 
 interface AddedPlayerDraft {
-  playerId: string;
+  playerId: number;
   dorsal: number;
   active: boolean;
 }
@@ -417,6 +417,7 @@ function InscriptionModal({
   const [teamName, setTeamName] = useState("");
   const [teamNameError, setTeamNameError] = useState("");
   const [captainNumber, setCaptainNumber] = useState<number>(10);
+  const [captainDorsalNotice, setCaptainDorsalNotice] = useState<string>("");
   const [draftPlayers, setDraftPlayers] = useState<AddedPlayerDraft[]>([]);
   const [memberError, setMemberError] = useState("");
   const [draftPlayerId, setDraftPlayerId] = useState("");
@@ -439,10 +440,10 @@ function InscriptionModal({
   const handleAddPlayer = () => {
     setMemberError("");
 
-    const playerId = draftPlayerId.trim();
+    const playerId = Number(draftPlayerId.trim());
     const dorsal = Number(draftPlayerDorsal);
 
-    if (!playerId) { setMemberError("El playerId es obligatorio."); return; }
+    if (!Number.isInteger(playerId) || playerId < 1) { setMemberError("El playerId debe ser un número entero mayor a 0."); return; }
     if (!Number.isInteger(dorsal) || dorsal < 1 || dorsal > 99) { setMemberError("El dorsal debe estar entre 1 y 99."); return; }
     if (draftPlayers.some((p) => p.playerId === playerId)) { setMemberError("Ese playerId ya fue agregado."); return; }
     if (draftPlayers.some((p) => p.dorsal === dorsal) || captainNumber === dorsal) { setMemberError("Ese dorsal ya está asignado."); return; }
@@ -454,11 +455,11 @@ function InscriptionModal({
     setDraftPlayerActive(true);
   };
 
-  const updateDraftDorsal = (playerId: string, dorsal: number) => {
+  const updateDraftDorsal = (playerId: number, dorsal: number) => {
     setDraftPlayers((prev) => prev.map((p) => p.playerId === playerId ? { ...p, dorsal } : p));
   };
 
-  const updateDraftActive = (playerId: string, active: boolean) => {
+  const updateDraftActive = (playerId: number, active: boolean) => {
     setDraftPlayers((prev) => prev.map((p) => p.playerId === playerId ? { ...p, active } : p));
   };
 
@@ -478,10 +479,12 @@ function InscriptionModal({
     setSubmitting(true);
     setSubmitError("");
     try {
-      const team = await teamService.create({ name: teamName.trim(), captainId: accountId, captainDorsal: captainNumber });
+      const team = await teamService.create({ name: teamName.trim(), captainId: accountId, primaryColor: P.primary, secondaryColor: P.secondary });
+      const createdTeamId = team.id;
+
       await Promise.all(
         draftPlayers.map((p) =>
-          teamService.addMember(team.id, { memberRole: "PLAYER", playerId: p.playerId, dorsal: p.dorsal, active: p.active }).catch(() => {})
+          teamService.addMember(createdTeamId, { memberRole: "PLAYER", playerId: p.playerId, dorsal: p.dorsal, active: p.active }).catch(() => {})
         )
       );
       const members: TeamRosterMember[] = [
@@ -489,9 +492,10 @@ function InscriptionModal({
         ...draftPlayers.map((p, i) => ({ id: i + 2, name: `Jugador ${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
       ];
       onClose();
-      onSuccess({ teamName: team.name, members, teamId: team.id });
-    } catch {
-      setSubmitError("Error al crear el equipo. Intenta de nuevo.");
+      onSuccess({ teamName: team.name, members, teamId: createdTeamId });
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : "Error al crear el equipo. Intenta de nuevo.";
+      setSubmitError(message);
       setSubmitting(false);
     }
   };
@@ -606,7 +610,8 @@ function InscriptionModal({
 
                     <div>
                       <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Dorsal del capitán (0 a 99)</label>
-                      <input type="number" min={0} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 0 : v); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
+                      <input type="number" min={0} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 0 : v); setCaptainDorsalNotice("El dorsal del capitán se guarda localmente; el backend no lo expone en TeamDTO."); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
+                      {captainDorsalNotice && <p className="mt-1 text-xs" style={{ color: P.default, fontWeight: 500 }}>{captainDorsalNotice}</p>}
                     </div>
 
                     <div className="rounded-2xl border p-4" style={{ borderColor: "rgba(0,0,0,0.10)", backgroundColor: "#FAFAFA" }}>

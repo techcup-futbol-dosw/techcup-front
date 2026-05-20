@@ -44,13 +44,15 @@ export type MyTeamDto = {
 
 export type CreateTeamRequest = {
     name: string;
-    captainDorsal?: number;
     captainId?: number;
+    logoUrl?: string | null;
+    primaryColor?: string;
+    secondaryColor?: string;
 };
 
 export type AddMemberRequest = {
     memberRole: "PLAYER";
-    playerId: number | string;
+    playerId: number;
     dorsal: number;
     active: boolean;
 };

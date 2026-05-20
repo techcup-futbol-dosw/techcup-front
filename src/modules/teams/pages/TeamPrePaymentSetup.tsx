@@ -84,7 +84,7 @@ export function TeamPrePaymentSetup() {
   const storedTeamContext = loadStoredTeamContext();
 
   const [teamId, setTeamId] = useState<number | null>(state.teamId ?? storedTeamContext?.teamId ?? null);
-  const [roleInTeam, setRoleInTeam] = useState<RoleType>(state.roleInTeam ?? storedTeamContext?.roleInTeam ?? "capitan");
+  const [roleInTeam] = useState<RoleType>(state.roleInTeam ?? storedTeamContext?.roleInTeam ?? "capitan");
   const [teamStatus, setTeamStatus] = useState<TeamStatus>(state.teamStatus ?? storedTeamContext?.teamStatus ?? "pending-payment");
   const isLockedByPayment = teamStatus === "in-review" || teamStatus === "active";
   const canEdit = roleInTeam === "capitan" && !isLockedByPayment;
@@ -261,18 +261,18 @@ export function TeamPrePaymentSetup() {
   const addMember = async () => {
     if (!canEdit) return;
 
-    const playerId = newMemberPlayerId.trim();
+    const playerId = Number(newMemberPlayerId.trim());
     const jersey = Number(newMemberJersey);
 
     if (members.length >= 12) {
       setMemberError("No puedes superar 12 integrantes en la plantilla.");
       return;
     }
-    if (!playerId) {
-      setMemberError("El ID del jugador es obligatorio.");
+    if (!Number.isInteger(playerId) || playerId < 1) {
+      setMemberError("El ID del jugador debe ser un número entero mayor a 0.");
       return;
     }
-    if (members.some((member) => String(member.id) === playerId)) {
+    if (members.some((member) => member.id === playerId)) {
       setMemberError("Ese jugador ya está en la plantilla.");
       return;
     }
@@ -614,8 +614,9 @@ export function TeamPrePaymentSetup() {
                   disabled={!canEdit}
                   value={newMemberPlayerId}
                   onChange={(event) => setNewMemberPlayerId(event.target.value)}
-                  type="text"
-                  placeholder="Ej. 42 o UUID"
+                  type="number"
+                  min={1}
+                  placeholder="Ej. 42"
                   className="w-full rounded-lg border px-2 py-1.5 text-sm"
                   style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
                 />
