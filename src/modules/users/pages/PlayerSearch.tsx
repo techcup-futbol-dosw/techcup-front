@@ -134,7 +134,7 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
           cursor: invited ? "default" : "pointer",
         }}
       >
-        {invited ? <><Check style={{ width: 15, height: 15 }} /> Invitación enviada</> : "Invitar al Equipo"}
+        {invited ? <><Check style={{ width: 15, height: 15 }} /> Añadido al equipo</> : "Añadir al Equipo"}
       </motion.button>
     </motion.article>
   );
@@ -214,18 +214,19 @@ export default function PlayerSearch() {
     setShowAdvanced(false);
   };
 
-  const handleInvite = async (id: number) => {
+  const handleAddMember = async (id: number) => {
+    const currentTeamId = teamContext?.teamId;
+    if (!currentTeamId) {
+      setToast("No se encontró tu equipo activo.");
+      return;
+    }
     const p = players.find((x) => x.id === id);
     try {
-      if (teamContext?.teamId) {
-        await teamService.inviteMember(teamContext.teamId, { teamId: teamContext.teamId, playerId: id });
-      } else {
-        await playerService.invite(id);
-      }
+      await teamService.addMember(currentTeamId, { teamId: currentTeamId, memberRole: "PLAYER", playerId: id, active: true });
       setInvited((prev) => new Set([...prev, id]));
-      if (p) setToast(teamContext?.teamId ? `Invitación enviada a ${p.nombre} para ${teamContext.teamName ?? "tu equipo"}` : `Invitación enviada a ${p.nombre}`);
+      if (p) setToast(`${p.nombre} añadido al equipo`);
     } catch {
-      setToast("No se pudo enviar la invitación.");
+      setToast("No se pudo añadir al jugador.");
     }
   };
 
@@ -428,7 +429,7 @@ export default function PlayerSearch() {
                 <PlayerCard
                   player={player}
                   query={debouncedName}
-                  onInvite={handleInvite}
+                  onInvite={handleAddMember}
                   invited={invited.has(player.id)}
                 />
               </motion.div>

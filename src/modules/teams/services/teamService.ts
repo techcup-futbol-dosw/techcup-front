@@ -44,19 +44,15 @@ export type MyTeamDto = {
 
 export type CreateTeamRequest = {
     name: string;
-    // backend may accept either a captain id or a dorsal; include both optionally
     captainDorsal?: number;
     captainId?: number;
-    invitedEmails?: string[];
 };
 
-export type InviteMemberRequest = {
-    // Align with InviteDTO.java: send playerId (and optional teamId)
+export type AddMemberRequest = {
+    teamId: number;
+    memberRole: string;
     playerId: number;
-    teamId?: number;
-    // legacy/email-based invite fields (not sent to backend by default)
-    email?: string;
-    jerseyNumber?: number;
+    active: boolean;
 };
 
 export type UploadPaymentRequest = {
@@ -72,8 +68,8 @@ export const teamService = {
         return http.post<MyTeamDto>("/teams", payload);
     },
 
-    inviteMember(teamId: number, payload: InviteMemberRequest) {
-        return http.post<void>(`/teams/${teamId}/members/invite`, payload);
+    addMember(teamId: number, payload: AddMemberRequest) {
+        return http.post<AddMemberRequest>(`/teams/${teamId}/members`, payload);
     },
 
     uploadPaymentProof(teamId: number, file: File) {

@@ -7,6 +7,7 @@ import logoTechcup from "@/assets/logo.png";
 import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
 import { useAuth } from "@/core/auth/AuthContext";
 import { teamService } from "@/modules/teams/services/teamService";
+import { playerService, type PlayerDto } from "@/modules/users/services/playerService";
 import { notificationService } from "@/modules/users/services/notificationService";
 import { userService } from "@/modules/users/services/userService";
 import {
@@ -32,6 +33,8 @@ import {
   FileText,
   ImageIcon,
   Paperclip,
+  Loader2,
+  Search,
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────
@@ -143,10 +146,10 @@ interface TeamRosterMember {
   jerseyNumber: number;
 }
 
-interface InvitedMemberDraft {
-  email: string;
-  role: "Jugador";
-  jerseyNumber: number;
+interface AddedPlayerDraft {
+  playerId: number;
+  playerName: string;
+  playerEmail: string;
 }
 
 const TEAM_CONTEXT_STORAGE_KEY = "techcup.teamContext";
@@ -416,43 +419,38 @@ function InscriptionModal({
   accountId,
 }: {
   onClose: () => void;
-  onSuccess: (payload: { teamId: number; teamName: string; pendingInvites: PendingInviteDraft[] }) => void;
+  onSuccess: (payload: { teamName: string; members: TeamRosterMember[]; teamId: number }) => void;
   accountId: number | null;
 }) {
   const [step, setStep] = useState<1 | 2>(1);
   const [teamName, setTeamName] = useState("");
   const [teamNameError, setTeamNameError] = useState("");
-  const [emailInput, setEmailInput] = useState("");
   const [captainNumber, setCaptainNumber] = useState<number>(10);
-  const [jerseyInput, setJerseyInput] = useState(11);
-  const [invited, setInvited] = useState<InvitedMemberDraft[]>([]);
-  const [emailError, setEmailError] = useState("");
+  const [draftPlayers, setDraftPlayers] = useState<AddedPlayerDraft[]>([]);
   const [memberError, setMemberError] = useState("");
-  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PlayerDto[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
-  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-  const isInstitutionalEmail = (e: string) => /@[^\s@]*\.edu(\.[a-z]{2})?$/i.test(e);
   const validTeamName = /^[A-Za-zÀ-ÿ0-9]+(?:[\s-][A-Za-zÀ-ÿ0-9]+)*$/;
 
-  const suggestEmail = (value: string) => {
-    const typoMap: Record<string, string> = {
-      "gmal.com": "gmail.com", "gnail.com": "gmail.com", "hotnail.com": "hotmail.com",
-      "outlok.com": "outlook.com", "yaho.com": "yahoo.com", "escuelaing.edu.coo": "escuelaing.edu.co",
-    };
-    const parts = value.toLowerCase().split("@");
-    if (parts.length !== 2) return null;
-    const replacement = typoMap[parts[1]];
-    if (!replacement) return null;
-    return `${parts[0]}@${replacement}`;
-  };
-
-  const getNextJersey = () => {
-    const used = new Set<number>([captainNumber, ...invited.map((m) => m.jerseyNumber)]);
-    for (let i = 0; i <= 99; i += 1) { if (!used.has(i)) return i; }
-    return 0;
-  };
+  useEffect(() => {
+    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    const t = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await playerService.search({ query: searchQuery.trim(), size: 5 });
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const validateStepOne = () => {
     const normalized = teamName.trim();
@@ -463,60 +461,39 @@ function InscriptionModal({
     return true;
   };
 
-  const handleAddInvite = () => {
-    const val = emailInput.trim().toLowerCase();
-    const jersey = Number(jerseyInput);
+  const handleAddPlayer = (player: PlayerDto) => {
     setMemberError("");
-    if (!val) return;
-    if (invited.length >= 11) { setMemberError("Máximo 12 personas por equipo (1 capitán + 11 jugadores)"); return; }
-    if (!isValidEmail(val)) { setEmailError("Ingresa un correo válido"); setEmailSuggestion(suggestEmail(val)); return; }
-    if (!isInstitutionalEmail(val)) { setEmailError("Debe ser correo institucional (.edu)"); return; }
-    if (invited.some((m) => m.email === val)) { setEmailError("Este correo ya fue añadido"); return; }
-    if (!Number.isInteger(jersey) || jersey < 0 || jersey > 99) { setMemberError("El dorsal debe estar entre 0 y 99"); return; }
-    if (jersey === captainNumber || invited.some((m) => m.jerseyNumber === jersey)) { setMemberError("Ese dorsal ya está asignado en el equipo"); return; }
-    setInvited((prev) => [...prev, { email: val, role: "Jugador", jerseyNumber: jersey }]);
-    setEmailInput("");
-    setJerseyInput(getNextJersey());
-    setEmailError("");
-    setEmailSuggestion(null);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddInvite(); }
+    if (draftPlayers.some((p) => p.playerId === Number(player.id))) return;
+    if (draftPlayers.length >= 11) { setMemberError("Máximo 11 jugadores adicionales (1 capitán + 11 jugadores)"); return; }
+    setDraftPlayers((prev) => [...prev, { playerId: Number(player.id), playerName: player.nombre, playerEmail: player.email }]);
+    setSearchQuery("");
+    setSearchResults([]);
   };
 
   const handleSubmit = async () => {
-    if (!accountId) {
-      setSubmitError("No se pudo identificar el capitán autenticado.");
-      return;
-    }
-
-    const totalMembers = 1 + invited.length;
+    if (!accountId) { setSubmitError("No se pudo identificar el capitán autenticado."); return; }
+    const totalMembers = 1 + draftPlayers.length;
     if (totalMembers < 7) { setMemberError("El equipo debe tener mínimo 7 personas (incluyendo capitán)"); return; }
     if (totalMembers > 12) { setMemberError("El equipo no puede superar 12 personas"); return; }
     if (!Number.isInteger(captainNumber) || captainNumber < 0 || captainNumber > 99) { setMemberError("El dorsal del capitán debe estar entre 0 y 99"); return; }
-
-    setIsSubmitting(true);
+    setSubmitting(true);
     setSubmitError("");
-
     try {
-      const createdTeam = await teamService.create({
-        name: teamName.trim(),
-        captainId: accountId,
-        primaryColor: P.primary,
-        secondaryColor: P.secondary,
-      });
-
+      const team = await teamService.create({ name: teamName.trim(), captainId: accountId, captainDorsal: captainNumber });
+      await Promise.all(
+        draftPlayers.map((p) =>
+          teamService.addMember(team.id, { teamId: team.id, memberRole: "PLAYER", playerId: p.playerId, active: true }).catch(() => {})
+        )
+      );
+      const members: TeamRosterMember[] = [
+        { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
+        ...draftPlayers.map((p, i) => ({ id: i + 2, name: p.playerName, email: p.playerEmail, role: "Jugador" as const, jerseyNumber: 0 })),
+      ];
       onClose();
-      onSuccess({
-        teamId: createdTeam.id,
-        teamName: createdTeam.name,
-        pendingInvites: invited.map((member) => ({ email: member.email, jerseyNumber: member.jerseyNumber })),
-      });
+      onSuccess({ teamName: team.name, members, teamId: team.id });
     } catch {
-      setSubmitError("No se pudo crear el equipo. Verifica los datos e inténtalo de nuevo.");
-    } finally {
-      setIsSubmitting(false);
+      setSubmitError("Error al crear el equipo. Intenta de nuevo.");
+      setSubmitting(false);
     }
   };
 
@@ -542,7 +519,7 @@ function InscriptionModal({
                 <div>
                   <p className="text-sm" style={{ fontWeight: 700, color: P.secondary }}>Rol de Capitán</p>
                   <p className="text-xs mt-0.5 leading-relaxed" style={{ color: "#7A5C10", fontWeight: 500 }}>
-                    La persona que crea la invitación y el grupo se le asigna el rol de<span style={{ fontWeight: 700 }}> Capitán </span>automáticamente, sin poder hacer el cambio durante el torneo.
+                    La persona que crea el equipo se le asigna el rol de<span style={{ fontWeight: 700 }}> Capitán </span>automáticamente, sin poder hacer el cambio durante el torneo.
                   </p>
                 </div>
               </motion.div>
@@ -551,7 +528,7 @@ function InscriptionModal({
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <p className="text-xs uppercase tracking-widest mb-1" style={{ fontWeight: 700, color: P.primary }}>Inscripción al Torneo</p>
-                  <h2 className="text-xl text-black" style={{ fontWeight: 700 }}>{step === 1 ? "Crea tu equipo" : "Invita a tus compañeros"}</h2>
+                  <h2 className="text-xl text-black" style={{ fontWeight: 700 }}>{step === 1 ? "Crea tu equipo" : "Añade a tus compañeros"}</h2>
                   <p className="text-xs mt-1" style={{ color: P.default, fontWeight: 500 }}>Paso {step} de 2</p>
                 </div>
                 <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-[#F8F9FA] transition-colors duration-200">
@@ -610,7 +587,7 @@ function InscriptionModal({
                   </motion.div>
                 )}
 
-                {/* Step 2: invite */}
+                {/* Step 2: add players */}
                 {step === 2 && (
                   <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.22 }} className="space-y-5">
                     <div className="flex items-center gap-3 p-4 rounded-2xl border" style={{ borderColor: `${P.primary}25`, backgroundColor: `${P.primary}07` }}>
@@ -623,7 +600,7 @@ function InscriptionModal({
                       </div>
                       <div className="ml-auto">
                         <span className="text-xs px-2.5 py-1 rounded-full" style={{ backgroundColor: `${P.success}18`, color: P.success, fontWeight: 700 }}>
-                          {1 + invited.length} miembro{invited.length !== 0 ? "s" : ""}
+                          {1 + draftPlayers.length} miembro{draftPlayers.length !== 0 ? "s" : ""}
                         </span>
                       </div>
                     </div>
@@ -633,47 +610,72 @@ function InscriptionModal({
                       <input type="number" min={0} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 0 : v); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
                     </div>
 
-                    <div>
-                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Invitar por correo institucional</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-2">
+                    <div className="relative">
+                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Buscar jugador por nombre</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: P.default }} />
                         <input
-                          type="email" placeholder="correo@universidad.edu" value={emailInput}
-                          onChange={(e) => { const v = e.target.value; setEmailInput(v); setEmailError(""); setEmailSuggestion(v ? suggestEmail(v) : null); }}
-                          onKeyDown={handleKeyDown}
-                          className="flex-1 px-4 py-3 rounded-xl border text-sm bg-white outline-none transition-all duration-200"
-                          style={{ borderColor: emailError ? P.primary : emailInput ? P.info : "#E9ECEF", fontWeight: 500, boxShadow: emailInput && !emailError ? `0 0 0 3px ${P.info}15` : emailError ? `0 0 0 3px ${P.primary}15` : "none" }}
+                          type="text"
+                          placeholder="Ej. Juan García"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm bg-white outline-none transition-all duration-200"
+                          style={{ borderColor: searchQuery ? P.info : "#E9ECEF", fontWeight: 500, boxShadow: searchQuery ? `0 0 0 3px ${P.info}15` : "none" }}
                         />
-                        <input type="number" min={0} max={99} value={jerseyInput} onChange={(e) => { const v = Number(e.target.value); setJerseyInput(Number.isNaN(v) ? 0 : v); if (memberError) setMemberError(""); }} className="px-3 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} aria-label="Dorsal" />
-                        <motion.button whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }} onClick={handleAddInvite} className="w-11 h-11 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ backgroundColor: P.info }}>
-                          <UserPlus className="w-5 h-5" />
-                        </motion.button>
+                        {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin" style={{ color: P.default }} />}
                       </div>
-                      {emailError && (
-                        <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 500 }}>
-                          <AlertCircle className="w-3 h-3" />{emailError}
-                        </motion.p>
-                      )}
-                      {!emailError && emailSuggestion && (
-                        <p className="text-xs mt-1.5" style={{ color: P.info, fontWeight: 600 }}>
-                          ¿Quisiste decir <button type="button" onClick={() => setEmailInput(emailSuggestion)} style={{ textDecoration: "underline" }}>{emailSuggestion}</button>?
-                        </p>
-                      )}
+
+                      <AnimatePresence>
+                        {searchResults.length > 0 && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                            className="absolute left-0 right-0 z-10 mt-1 bg-white rounded-2xl overflow-hidden"
+                            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)", border: "1px solid rgba(0,0,0,0.07)" }}
+                          >
+                            {searchResults.map((player) => {
+                              const alreadyAdded = draftPlayers.some((p) => p.playerId === Number(player.id));
+                              return (
+                                <button
+                                  key={player.id}
+                                  type="button"
+                                  onClick={() => handleAddPlayer(player)}
+                                  disabled={alreadyAdded}
+                                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-[#F8F9FA] disabled:opacity-50 disabled:cursor-default"
+                                  style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}
+                                >
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: alreadyAdded ? P.success : P.info, fontWeight: 700 }}>
+                                    {alreadyAdded ? <Check className="w-4 h-4" /> : player.nombre.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.nombre}</p>
+                                    <p className="text-xs truncate" style={{ color: P.default, fontWeight: 500 }}>{player.posicion} · {player.semestre}° semestre</p>
+                                  </div>
+                                  {!alreadyAdded && (
+                                    <UserPlus className="w-4 h-4 flex-shrink-0" style={{ color: P.info }} />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
                       {memberError && <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{memberError}</p>}
-                      <p className="text-xs mt-1.5" style={{ color: P.default, fontWeight: 500 }}>Presiona Enter o + para añadir. Regla del torneo: entre 7 y 12 personas por equipo.</p>
+                      <p className="text-xs mt-1.5" style={{ color: P.default, fontWeight: 500 }}>Los jugadores se añaden directamente al equipo. Regla del torneo: entre 7 y 12 personas.</p>
                     </div>
 
-                    {invited.length > 0 && (
+                    {draftPlayers.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs" style={{ fontWeight: 700, color: "#6C757D" }}>Invitados ({invited.length})</p>
+                        <p className="text-xs" style={{ fontWeight: 700, color: "#6C757D" }}>Jugadores añadidos ({draftPlayers.length})</p>
                         <AnimatePresence>
-                          {invited.map((member) => (
-                            <motion.div key={`${member.email}-${member.jerseyNumber}`} initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.22 }} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-black/6 bg-white">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{member.email.charAt(0).toUpperCase()}</div>
+                          {draftPlayers.map((player) => (
+                            <motion.div key={player.playerId} initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.22 }} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-black/6 bg-white">
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{player.playerName.charAt(0).toUpperCase()}</div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm truncate" style={{ fontWeight: 600 }}>{member.email}</p>
-                                <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>Jugador · #{member.jerseyNumber}</p>
+                                <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.playerName}</p>
+                                <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>{player.playerEmail}</p>
                               </div>
-                              <button onClick={() => setInvited((prev) => prev.filter((e) => e.email !== member.email))} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors duration-150 flex-shrink-0">
+                              <button onClick={() => setDraftPlayers((prev) => prev.filter((p) => p.playerId !== player.playerId))} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors duration-150 flex-shrink-0">
                                 <Trash2 className="w-3.5 h-3.5" style={{ color: P.default }} />
                               </button>
                             </motion.div>
@@ -682,18 +684,33 @@ function InscriptionModal({
                       </div>
                     )}
 
-                    {invited.length === 0 && (
+                    {draftPlayers.length === 0 && (
                       <div className="flex flex-col items-center py-6 rounded-2xl border-2 border-dashed" style={{ borderColor: "#E9ECEF" }}>
                         <Users className="w-8 h-8 mb-2" style={{ color: P.default }} />
-                        <p className="text-sm" style={{ color: P.default, fontWeight: 500 }}>Aún no has invitado a nadie</p>
+                        <p className="text-sm" style={{ color: P.default, fontWeight: 500 }}>Aún no has añadido a nadie</p>
                         <p className="text-xs mt-0.5" style={{ color: "#CED4DA", fontWeight: 500 }}>Necesitas mínimo 7 integrantes incluyendo al capitán</p>
                       </div>
                     )}
 
+                    {submitError && (
+                      <p className="text-xs flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}>
+                        <AlertCircle className="w-3 h-3" />{submitError}
+                      </p>
+                    )}
+
                     <div className="flex gap-3 pt-2">
-                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setStep(1)} className="flex-none px-5 py-3.5 rounded-2xl border border-black/8 text-sm" style={{ fontWeight: 600, color: "#6C757D" }}>← Atrás</motion.button>
-                      <motion.button whileHover={{ scale: 1.02, y: -1 }} whileTap={{ scale: 0.97 }} onClick={handleSubmit} disabled={isSubmitting} className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm" style={{ backgroundColor: isSubmitting ? "#E9ECEF" : P.primary, fontWeight: 700, boxShadow: isSubmitting ? "none" : `0 8px 24px ${P.primary}35`, color: isSubmitting ? P.default : "white", cursor: isSubmitting ? "not-allowed" : "pointer" }}>
-                        <Send className="w-4 h-4" />{isSubmitting ? "Creando equipo..." : "Confirmar inscripción"}
+                      <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={() => setStep(1)} disabled={submitting} className="flex-none px-5 py-3.5 rounded-2xl border border-black/8 text-sm" style={{ fontWeight: 600, color: "#6C757D" }}>← Atrás</motion.button>
+                      <motion.button
+                        whileHover={!submitting ? { scale: 1.02, y: -1 } : {}} whileTap={!submitting ? { scale: 0.97 } : {}}
+                        onClick={handleSubmit}
+                        disabled={submitting}
+                        className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white text-sm"
+                        style={{ backgroundColor: submitting ? "#E9ECEF" : P.primary, fontWeight: 700, boxShadow: submitting ? "none" : `0 8px 24px ${P.primary}35`, color: submitting ? P.default : "white", cursor: submitting ? "not-allowed" : "pointer" }}
+                      >
+                        {submitting
+                          ? <><Loader2 className="w-4 h-4 animate-spin" />Creando equipo...</>
+                          : <><Send className="w-4 h-4" />Confirmar inscripción</>
+                        }
                       </motion.button>
                     </div>
                     {submitError && <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{submitError}</p>}
@@ -848,12 +865,15 @@ export default function Dashboard() {
     teamService.getMyTeam()
       .then((team) => {
         setTeamId(team.id);
-        setRoleInTeam(accountId === team.captainId ? "capitan" : "jugador");
+        setRoleInTeam(accountId === team.captainId ? "capitan" : (team.roleInTeam ?? "jugador"));
         setTeamStatus(team.teamStatus);
         setTeamName(team.name);
         setTeamLogoUrl(team.logoUrl ?? null);
         setTeamPrimaryColor(team.primaryColor ?? P.primary);
         setTeamSecondaryColor(team.secondaryColor ?? P.secondary);
+        setJoinedAt(team.joinedAt);
+        setTeamMembers(team.members.map((m) => ({ id: m.id, name: m.name ?? "", email: m.email ?? "", role: m.role ?? "Jugador", jerseyNumber: m.jerseyNumber ?? 0 })));
+        setTeamSchedule(team.schedule);
       })
       .catch(() => {});
   }, [accountId]);
@@ -1005,7 +1025,7 @@ export default function Dashboard() {
           <InscriptionModal
             accountId={accountId}
             onClose={() => setShowInscription(false)}
-            onSuccess={({ teamId: createdTeamId, teamName: createdTeamName, pendingInvites }) => {
+            onSuccess={({ teamName: createdTeamName, members, teamId: createdTeamId }) => {
               setTeamId(createdTeamId);
               setRoleInTeam("capitan");
               setTeamStatus("pending-payment");
@@ -1037,7 +1057,7 @@ export default function Dashboard() {
                   primaryColor: P.primary,
                   secondaryColor: P.secondary,
                   logoUrl: null,
-                  pendingInvites,
+                  teamMembers: members,
                 },
               });
               showToast("¡Equipo creado correctamente!", P.success);
