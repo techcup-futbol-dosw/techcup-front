@@ -49,9 +49,8 @@ export type CreateTeamRequest = {
 };
 
 export type AddMemberRequest = {
-    teamId: number;
-    memberRole: string;
-    playerId: number;
+    memberRole: "PLAYER";
+    playerId: number | string;
     dorsal: number;
     active: boolean;
 };

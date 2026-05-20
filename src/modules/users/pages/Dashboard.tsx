@@ -1,5 +1,4 @@
 // src/modules/users/pages/Dashboard.tsx
-import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
@@ -7,7 +6,6 @@ import logoTechcup from "@/assets/logo.png";
 import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
 import { useAuth } from "@/core/auth/AuthContext";
 import { teamService } from "@/modules/teams/services/teamService";
-import { playerService, type PlayerDto } from "@/modules/users/services/playerService";
 import { notificationService } from "@/modules/users/services/notificationService";
 import { userService } from "@/modules/users/services/userService";
 import {
@@ -24,7 +22,6 @@ import {
   ChevronRight,
   ClipboardList,
   Shield,
-  UserPlus,
   Trash2,
   Send,
   AlertCircle,
@@ -34,7 +31,6 @@ import {
   ImageIcon,
   Paperclip,
   Loader2,
-  Search,
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────
@@ -119,11 +115,6 @@ interface TeamScheduleItem {
   hour: string;
 }
 
-interface PendingInviteDraft {
-  email: string;
-  jerseyNumber: number;
-}
-
 interface TeamMemberStats {
   id: number;
   name: string;
@@ -147,9 +138,7 @@ interface TeamRosterMember {
 }
 
 interface AddedPlayerDraft {
-  playerId: number;
-  playerName: string;
-  playerEmail: string;
+  playerId: string;
   dorsal: number;
   active: boolean;
 }
@@ -430,29 +419,13 @@ function InscriptionModal({
   const [captainNumber, setCaptainNumber] = useState<number>(10);
   const [draftPlayers, setDraftPlayers] = useState<AddedPlayerDraft[]>([]);
   const [memberError, setMemberError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<PlayerDto[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [draftPlayerId, setDraftPlayerId] = useState("");
+  const [draftPlayerDorsal, setDraftPlayerDorsal] = useState("");
+  const [draftPlayerActive, setDraftPlayerActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const validTeamName = /^[A-Za-zÀ-ÿ0-9]+(?:[\s-][A-Za-zÀ-ÿ0-9]+)*$/;
-
-  useEffect(() => {
-    if (!searchQuery.trim()) { setSearchResults([]); return; }
-    const t = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const results = await playerService.search({ query: searchQuery.trim(), size: 5 });
-        setSearchResults(results);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 400);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
 
   const validateStepOne = () => {
     const normalized = teamName.trim();
@@ -463,20 +436,29 @@ function InscriptionModal({
     return true;
   };
 
-  const handleAddPlayer = (player: PlayerDto) => {
+  const handleAddPlayer = () => {
     setMemberError("");
-    if (draftPlayers.some((p) => p.playerId === Number(player.id))) return;
+
+    const playerId = draftPlayerId.trim();
+    const dorsal = Number(draftPlayerDorsal);
+
+    if (!playerId) { setMemberError("El playerId es obligatorio."); return; }
+    if (!Number.isInteger(dorsal) || dorsal < 1 || dorsal > 99) { setMemberError("El dorsal debe estar entre 1 y 99."); return; }
+    if (draftPlayers.some((p) => p.playerId === playerId)) { setMemberError("Ese playerId ya fue agregado."); return; }
+    if (draftPlayers.some((p) => p.dorsal === dorsal) || captainNumber === dorsal) { setMemberError("Ese dorsal ya está asignado."); return; }
     if (draftPlayers.length >= 11) { setMemberError("Máximo 11 jugadores adicionales (1 capitán + 11 jugadores)"); return; }
-    setDraftPlayers((prev) => [...prev, { playerId: Number(player.id), playerName: player.nombre, playerEmail: player.email, dorsal: 0, active: true }]);
-    setSearchQuery("");
-    setSearchResults([]);
+
+    setDraftPlayers((prev) => [...prev, { playerId, dorsal, active: draftPlayerActive }]);
+    setDraftPlayerId("");
+    setDraftPlayerDorsal("");
+    setDraftPlayerActive(true);
   };
 
-  const updateDraftDorsal = (playerId: number, dorsal: number) => {
+  const updateDraftDorsal = (playerId: string, dorsal: number) => {
     setDraftPlayers((prev) => prev.map((p) => p.playerId === playerId ? { ...p, dorsal } : p));
   };
 
-  const updateDraftActive = (playerId: number, active: boolean) => {
+  const updateDraftActive = (playerId: string, active: boolean) => {
     setDraftPlayers((prev) => prev.map((p) => p.playerId === playerId ? { ...p, active } : p));
   };
 
@@ -499,12 +481,12 @@ function InscriptionModal({
       const team = await teamService.create({ name: teamName.trim(), captainId: accountId, captainDorsal: captainNumber });
       await Promise.all(
         draftPlayers.map((p) =>
-          teamService.addMember(team.id, { teamId: team.id, memberRole: "PLAYER", playerId: p.playerId, dorsal: p.dorsal, active: p.active }).catch(() => {})
+          teamService.addMember(team.id, { memberRole: "PLAYER", playerId: p.playerId, dorsal: p.dorsal, active: p.active }).catch(() => {})
         )
       );
       const members: TeamRosterMember[] = [
         { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
-        ...draftPlayers.map((p, i) => ({ id: i + 2, name: p.playerName, email: p.playerEmail, role: "Jugador" as const, jerseyNumber: 0 })),
+        ...draftPlayers.map((p, i) => ({ id: i + 2, name: `Jugador ${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
       ];
       onClose();
       onSuccess({ teamName: team.name, members, teamId: team.id });
@@ -545,7 +527,7 @@ function InscriptionModal({
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <p className="text-xs uppercase tracking-widest mb-1" style={{ fontWeight: 700, color: P.primary }}>Inscripción al Torneo</p>
-                  <h2 className="text-xl text-black" style={{ fontWeight: 700 }}>{step === 1 ? "Crea tu equipo" : "Añade a tus compañeros"}</h2>
+                  <h2 className="text-xl text-black" style={{ fontWeight: 700 }}>{step === 1 ? "Crea tu equipo" : "Añadir Miembros Iniciales"}</h2>
                   <p className="text-xs mt-1" style={{ color: P.default, fontWeight: 500 }}>Paso {step} de 2</p>
                 </div>
                 <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-[#F8F9FA] transition-colors duration-200">
@@ -627,58 +609,57 @@ function InscriptionModal({
                       <input type="number" min={0} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 0 : v); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
                     </div>
 
-                    <div className="relative">
-                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Buscar jugador por nombre</label>
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: P.default }} />
-                        <input
-                          type="text"
-                          placeholder="Ej. Juan García"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm bg-white outline-none transition-all duration-200"
-                          style={{ borderColor: searchQuery ? P.info : "#E9ECEF", fontWeight: 500, boxShadow: searchQuery ? `0 0 0 3px ${P.info}15` : "none" }}
-                        />
-                        {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin" style={{ color: P.default }} />}
+                    <div className="rounded-2xl border p-4" style={{ borderColor: "rgba(0,0,0,0.10)", backgroundColor: "#FAFAFA" }}>
+                      <p className="text-xs mb-3" style={{ color: P.textPrimary, fontWeight: 700 }}>Añadir Miembro Inicial</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                        <div>
+                          <label className="block text-xs mb-1" style={{ color: P.default, fontWeight: 700 }}>playerId *</label>
+                          <input
+                            type="text"
+                            placeholder="UUID o ID"
+                            value={draftPlayerId}
+                            onChange={(e) => setDraftPlayerId(e.target.value)}
+                            className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                            style={{ borderColor: "rgba(0,0,0,0.15)", fontWeight: 600 }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs mb-1" style={{ color: P.default, fontWeight: 700 }}>dorsal * (1-99)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={99}
+                            placeholder="10"
+                            value={draftPlayerDorsal}
+                            onChange={(e) => setDraftPlayerDorsal(e.target.value)}
+                            className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
+                            style={{ borderColor: "rgba(0,0,0,0.15)", fontWeight: 600 }}
+                          />
+                        </div>
                       </div>
-
-                      <AnimatePresence>
-                        {searchResults.length > 0 && (
-                          <motion.div
-                            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                            className="absolute left-0 right-0 z-10 mt-1 bg-white rounded-2xl overflow-hidden"
-                            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)", border: "1px solid rgba(0,0,0,0.07)" }}
-                          >
-                            {searchResults.map((player) => {
-                              const alreadyAdded = draftPlayers.some((p) => p.playerId === Number(player.id));
-                              return (
-                                <button
-                                  key={player.id}
-                                  type="button"
-                                  onClick={() => handleAddPlayer(player)}
-                                  disabled={alreadyAdded}
-                                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-[#F8F9FA] disabled:opacity-50 disabled:cursor-default"
-                                  style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}
-                                >
-                                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: alreadyAdded ? P.success : P.info, fontWeight: 700 }}>
-                                    {alreadyAdded ? <Check className="w-4 h-4" /> : player.nombre.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.nombre}</p>
-                                    <p className="text-xs truncate" style={{ color: P.default, fontWeight: 500 }}>{player.posicion} · {player.semestre}° semestre</p>
-                                  </div>
-                                  {!alreadyAdded && (
-                                    <UserPlus className="w-4 h-4 flex-shrink-0" style={{ color: P.info }} />
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {memberError && <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{memberError}</p>}
-                      <p className="text-xs mt-1.5" style={{ color: P.default, fontWeight: 500 }}>Los jugadores se añaden directamente al equipo. Regla del torneo: entre 7 y 12 personas.</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>memberRole:</span>
+                        <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${P.info}15`, color: P.info, fontWeight: 800 }}>PLAYER</span>
+                        <label className="ml-auto flex items-center gap-2 cursor-pointer select-none text-xs" style={{ color: P.textPrimary, fontWeight: 700 }}>
+                          <input
+                            type="checkbox"
+                            checked={draftPlayerActive}
+                            onChange={(e) => setDraftPlayerActive(e.target.checked)}
+                            className="w-4 h-4 rounded"
+                          />
+                          active
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleAddPlayer}
+                          className="rounded-lg border px-3 py-1.5 text-xs"
+                          style={{ borderColor: `${P.info}40`, color: P.info, fontWeight: 800, backgroundColor: "white" }}
+                        >
+                          Añadir
+                        </button>
+                      </div>
+                      {memberError && <p className="text-xs mt-2 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{memberError}</p>}
+                      <p className="text-xs mt-2" style={{ color: P.default, fontWeight: 500 }}>Regla del torneo: entre 7 y 12 integrantes contando al capitán.</p>
                     </div>
 
                     {draftPlayers.length > 0 && (
@@ -687,10 +668,10 @@ function InscriptionModal({
                         <AnimatePresence>
                           {draftPlayers.map((player) => (
                             <motion.div key={player.playerId} initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.22 }} className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl border border-black/6 bg-white">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{player.playerName.charAt(0).toUpperCase()}</div>
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{String(player.playerId).charAt(0).toUpperCase()}</div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.playerName}</p>
-                                <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>{player.playerEmail}</p>
+                                <p className="text-sm truncate" style={{ fontWeight: 600 }}>Jugador {player.playerId}</p>
+                                <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>memberRole: PLAYER</p>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 <input

@@ -55,7 +55,25 @@ function highlight(text: string, query: string) {
 }
 
 // ── PlayerCard ────────────────────────────────────
-function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; query: string; onInvite: (id: number) => void; invited: boolean }) {
+function PlayerCard({
+  player,
+  query,
+  onAdd,
+  added,
+  dorsal,
+  active,
+  onDorsalChange,
+  onActiveChange,
+}: {
+  player: PlayerDto;
+  query: string;
+  onAdd: (id: number) => void;
+  added: boolean;
+  dorsal: string;
+  active: boolean;
+  onDorsalChange: (id: number, dorsal: string) => void;
+  onActiveChange: (id: number, active: boolean) => void;
+}) {
   const pos = positionMeta[player.posicion] ?? { label: player.posicion, bg: `${P.default}14`, color: P.default };
   const avail = player.disponibilidad;
 
@@ -120,21 +138,50 @@ function PlayerCard({ player, query, onInvite, invited }: { player: PlayerDto; q
         </p>
       </div>
 
-      {/* Invite button */}
+      <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.02)" }}>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs" style={{ color: P.default, fontWeight: 700 }}>Dorsal *</label>
+          <input
+            type="number"
+            min={1}
+            max={99}
+            value={dorsal}
+            onChange={(e) => onDorsalChange(player.id, e.target.value)}
+            placeholder="1-99"
+            className="w-24 border rounded-lg px-2 py-1 text-xs text-center outline-none"
+            style={{ borderColor: "rgba(0,0,0,0.14)", color: P.textPrimary, fontWeight: 700 }}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>memberRole</span>
+          <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${P.info}15`, color: P.info, fontWeight: 800 }}>PLAYER</span>
+        </div>
+        <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
+          <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>Activo</span>
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => onActiveChange(player.id, e.target.checked)}
+            className="w-4 h-4 rounded"
+          />
+        </label>
+      </div>
+
+      {/* Add button */}
       <motion.button
-        whileHover={!invited ? { scale: 1.02 } : {}}
-        whileTap={!invited ? { scale: 0.98 } : {}}
+        whileHover={!added ? { scale: 1.02 } : {}}
+        whileTap={!added ? { scale: 0.98 } : {}}
         type="button"
-        onClick={() => !invited && onInvite(player.id)}
+        onClick={() => !added && onAdd(player.id)}
         className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2"
         style={{
-          backgroundColor: invited ? P.success : P.primary,
+          backgroundColor: added ? P.success : P.primary,
           fontWeight: 700,
-          boxShadow: invited ? `0 4px 14px ${P.success}35` : `0 4px 14px ${P.primary}35`,
-          cursor: invited ? "default" : "pointer",
+          boxShadow: added ? `0 4px 14px ${P.success}35` : `0 4px 14px ${P.primary}35`,
+          cursor: added ? "default" : "pointer",
         }}
       >
-        {invited ? <><Check style={{ width: 15, height: 15 }} /> Añadido al equipo</> : "Añadir al Equipo"}
+        {added ? <><Check style={{ width: 15, height: 15 }} /> Añadido al equipo</> : "Añadir Miembro"}
       </motion.button>
     </motion.article>
   );
@@ -154,7 +201,8 @@ export default function PlayerSearch() {
   const [players, setPlayers] = useState<PlayerDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [invited, setInvited] = useState<Set<number>>(new Set());
+  const [addedMembers, setAddedMembers] = useState<Set<number>>(new Set());
+  const [memberDrafts, setMemberDrafts] = useState<Record<number, { dorsal: string; active: boolean }>>({});
   const [toast, setToast] = useState<string | null>(null);
 
   const [debouncedName, setDebouncedName] = useState(filters.nombre);
@@ -214,16 +262,35 @@ export default function PlayerSearch() {
     setShowAdvanced(false);
   };
 
+  const updateMemberDraft = (id: number, patch: Partial<{ dorsal: string; active: boolean }>) => {
+    setMemberDrafts((prev) => ({
+      ...prev,
+      [id]: {
+        dorsal: prev[id]?.dorsal ?? "",
+        active: prev[id]?.active ?? true,
+        ...patch,
+      },
+    }));
+  };
+
   const handleAddMember = async (id: number) => {
     const currentTeamId = teamContext?.teamId;
     if (!currentTeamId) {
       setToast("No se encontró tu equipo activo.");
       return;
     }
+
+    const draft = memberDrafts[id] ?? { dorsal: "", active: true };
+    const dorsal = Number(draft.dorsal);
+    if (!Number.isInteger(dorsal) || dorsal < 1 || dorsal > 99) {
+      setToast("Ingresa un dorsal válido entre 1 y 99.");
+      return;
+    }
+
     const p = players.find((x) => x.id === id);
     try {
-      await teamService.addMember(currentTeamId, { teamId: currentTeamId, memberRole: "PLAYER", playerId: id, active: true });
-      setInvited((prev) => new Set([...prev, id]));
+      await teamService.addMember(currentTeamId, { memberRole: "PLAYER", playerId: id, dorsal, active: draft.active });
+      setAddedMembers((prev) => new Set([...prev, id]));
       if (p) setToast(`${p.nombre} añadido al equipo`);
     } catch {
       setToast("No se pudo añadir al jugador.");
@@ -429,8 +496,12 @@ export default function PlayerSearch() {
                 <PlayerCard
                   player={player}
                   query={debouncedName}
-                  onInvite={handleAddMember}
-                  invited={invited.has(player.id)}
+                  onAdd={handleAddMember}
+                  added={addedMembers.has(player.id)}
+                  dorsal={memberDrafts[player.id]?.dorsal ?? ""}
+                  active={memberDrafts[player.id]?.active ?? true}
+                  onDorsalChange={(id, dorsal) => updateMemberDraft(id, { dorsal })}
+                  onActiveChange={(id, active) => updateMemberDraft(id, { active })}
                 />
               </motion.div>
             ))}

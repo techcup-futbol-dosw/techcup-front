@@ -108,7 +108,7 @@ export function TeamPrePaymentSetup() {
   const [newMemberPlayerId, setNewMemberPlayerId] = useState("");
   const [newMemberJersey, setNewMemberJersey] = useState("");
   const [newMemberActive, setNewMemberActive] = useState(true);
-  const [isInviting, setIsInviting] = useState(false);
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [jerseyDrafts, setJerseyDrafts] = useState<Record<number, number>>(() =>
     (state.teamMembers?.length ? state.teamMembers : defaultMembers).reduce<Record<number, number>>((acc, member) => {
       acc[member.id] = member.jerseyNumber;
@@ -153,11 +153,11 @@ export function TeamPrePaymentSetup() {
         setMembers((prev) => {
           if (prev.length > 0) return prev;
           return backendMembers.map((member) => ({
-            id: member.playerId,
+            id: member.playerId ?? member.id,
             name: member.memberRole === "capitan" ? "Capitán" : `Jugador ${member.playerId}`,
             email: "",
             role: member.memberRole === "capitan" ? "Capitán" : "Jugador",
-            jerseyNumber: 0,
+            jerseyNumber: member.dorsal ?? 0,
           }));
         });
       })
@@ -261,18 +261,18 @@ export function TeamPrePaymentSetup() {
   const addMember = async () => {
     if (!canEdit) return;
 
-    const playerId = Number(newMemberPlayerId);
+    const playerId = newMemberPlayerId.trim();
     const jersey = Number(newMemberJersey);
 
     if (members.length >= 12) {
       setMemberError("No puedes superar 12 integrantes en la plantilla.");
       return;
     }
-    if (!Number.isInteger(playerId) || playerId <= 0) {
-      setMemberError("El ID del jugador debe ser un número mayor a 0.");
+    if (!playerId) {
+      setMemberError("El ID del jugador es obligatorio.");
       return;
     }
-    if (members.some((member) => member.id === playerId)) {
+    if (members.some((member) => String(member.id) === playerId)) {
       setMemberError("Ese jugador ya está en la plantilla.");
       return;
     }
@@ -289,24 +289,26 @@ export function TeamPrePaymentSetup() {
       return;
     }
 
-    setIsInviting(true);
+    setIsAddingMember(true);
     setMemberError(null);
 
     try {
       const result = await teamService.addMember(teamId, {
-        teamId,
         memberRole: "PLAYER",
         playerId,
         dorsal: jersey,
         active: newMemberActive,
       });
 
+      const parsedMemberId = Number(result.playerId ?? playerId);
+      const memberId = Number.isFinite(parsedMemberId) && parsedMemberId > 0 ? parsedMemberId : Date.now();
+
       const newMember: TeamRosterMember = {
-        id: result.playerId ?? playerId,
+        id: memberId,
         name: `Jugador ${playerId}`,
         email: "",
         role: "Jugador",
-        jerseyNumber: jersey,
+        jerseyNumber: result.dorsal ?? jersey,
       };
 
       setMembers((prev) => {
@@ -321,7 +323,7 @@ export function TeamPrePaymentSetup() {
     } catch {
       setMemberError("No se pudo añadir el jugador. Verifica el ID, dorsal y que no sea miembro activo ya.");
     } finally {
-      setIsInviting(false);
+      setIsAddingMember(false);
     }
   };
 
@@ -612,9 +614,8 @@ export function TeamPrePaymentSetup() {
                   disabled={!canEdit}
                   value={newMemberPlayerId}
                   onChange={(event) => setNewMemberPlayerId(event.target.value)}
-                  type="number"
-                  min={1}
-                  placeholder="Ej. 42"
+                  type="text"
+                  placeholder="Ej. 42 o UUID"
                   className="w-full rounded-lg border px-2 py-1.5 text-sm"
                   style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
                 />
@@ -648,7 +649,7 @@ export function TeamPrePaymentSetup() {
               <div className="flex items-center gap-2 ml-auto">
                 <button
                   type="button"
-                  disabled={!canEdit || members.length >= 12 || isInviting}
+                  disabled={!canEdit || members.length >= 12 || isAddingMember}
                   onClick={addMember}
                   className="rounded-lg border px-4 py-1.5 text-xs whitespace-nowrap"
                   style={{
@@ -656,10 +657,10 @@ export function TeamPrePaymentSetup() {
                     color: P.info,
                     fontWeight: 800,
                     backgroundColor: "white",
-                    opacity: !canEdit || members.length >= 12 || isInviting ? 0.45 : 1,
+                    opacity: !canEdit || members.length >= 12 || isAddingMember ? 0.45 : 1,
                   }}
                 >
-                  {isInviting ? "Añadiendo..." : "Añadir miembro"}
+                  {isAddingMember ? "Añadiendo..." : "Añadir miembro"}
                 </button>
                 <button
                   type="button"
