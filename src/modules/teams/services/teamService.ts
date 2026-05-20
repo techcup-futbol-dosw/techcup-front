@@ -51,7 +51,7 @@ export type CreateTeamRequest = {
 };
 
 export type AddMemberRequest = {
-    memberRole: "PLAYER";
+    memberRole: "PLAYER" | "CAPTAIN";
     playerId: number;
     dorsal: number;
     active: boolean;
@@ -63,28 +63,28 @@ export type UploadPaymentRequest = {
 
 export const teamService = {
     getMyTeam() {
-        return http.get<MyTeamDto>("/teams/my");
+        return http.get<MyTeamDto>("/api/teams/my");
     },
 
     getTeam(teamId: number) {
-        return http.get<MyTeamDto>(`/teams/${teamId}`);
+        return http.get<MyTeamDto>(`/api/teams/${teamId}`);
     },
 
     getTeamMembers(teamId: number) {
-        return http.get<TeamMemberDto[]>(`/teams/${teamId}/members`);
+        return http.get<TeamMemberDto[]>(`/api/teams/${teamId}/members`);
     },
 
     create(payload: CreateTeamRequest) {
-        return http.post<MyTeamDto>("/teams", payload);
+        return http.post<MyTeamDto>("/api/teams", payload);
     },
 
     addMember(teamId: number, payload: AddMemberRequest) {
-        return http.post<TeamMemberDto>(`/teams/${teamId}/members`, payload);
+        return http.post<TeamMemberDto>(`/api/teams/${teamId}/members`, payload);
     },
 
     uploadPaymentProof(teamId: number, file: File) {
         const body = new FormData();
         body.append("file", file);
-        return http.post<void>(`/teams/${teamId}/payment`, body);
+        return http.post<void>(`/api/teams/${teamId}/payment`, body);
     },
 };

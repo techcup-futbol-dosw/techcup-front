@@ -479,22 +479,56 @@ function InscriptionModal({
     setSubmitting(true);
     setSubmitError("");
     try {
-      const team = await teamService.create({ name: teamName.trim(), captainId: accountId, primaryColor: P.primary, secondaryColor: P.secondary });
+      // 1. Crear el equipo primero para obtener el teamId
+      const team = await teamService.create({
+        name: teamName.trim(),
+        captainId: accountId,
+        primaryColor: P.primary,
+        secondaryColor: P.secondary,
+        logoUrl: null,
+      });
       const createdTeamId = team.id;
 
-      await Promise.all(
+      // 2. Registrar al capitán como miembro con su dorsal
+      await teamService.addMember(createdTeamId, {
+        memberRole: "CAPTAIN",
+        playerId: accountId,
+        dorsal: captainNumber,
+        active: true,
+      }).catch(() => {});
+
+      // 3. Añadir los jugadores adicionales usando el teamId ya creado
+      const playerResults = await Promise.allSettled(
         draftPlayers.map((p) =>
-          teamService.addMember(createdTeamId, { memberRole: "PLAYER", playerId: p.playerId, dorsal: p.dorsal, active: p.active }).catch(() => {})
+          teamService.addMember(createdTeamId, {
+            memberRole: "PLAYER",
+            playerId: p.playerId,
+            dorsal: p.dorsal,
+            active: p.active,
+          })
         )
       );
+
+      const failedCount = playerResults.filter((r) => r.status === "rejected").length;
+
       const members: TeamRosterMember[] = [
         { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
         ...draftPlayers.map((p, i) => ({ id: i + 2, name: `Jugador ${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
       ];
+
       onClose();
       onSuccess({ teamName: team.name, members, teamId: createdTeamId });
+
+      if (failedCount > 0) {
+        // El equipo se creó correctamente pero algunos jugadores no pudieron añadirse.
+        // El capitán puede añadirlos manualmente desde la configuración del equipo.
+        console.warn(`${failedCount} jugador(es) no pudieron añadirse al equipo.`);
+      }
     } catch (error) {
-      const message = error instanceof Error && error.message ? error.message : "Error al crear el equipo. Intenta de nuevo.";
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Error al crear el equipo. Intenta de nuevo.";
       setSubmitError(message);
       setSubmitting(false);
     }
@@ -609,8 +643,8 @@ function InscriptionModal({
                     </div>
 
                     <div>
-                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Dorsal del capitán (0 a 99)</label>
-                      <input type="number" min={0} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 0 : v); setCaptainDorsalNotice("El dorsal del capitán se guarda localmente; el backend no lo expone en TeamDTO."); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
+                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Dorsal del capitán (1–99)</label>
+                      <input type="number" min={1} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 1 : v); setCaptainDorsalNotice(""); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
                       {captainDorsalNotice && <p className="mt-1 text-xs" style={{ color: P.default, fontWeight: 500 }}>{captainDorsalNotice}</p>}
                     </div>
 
