@@ -52,6 +52,7 @@ export type AddMemberRequest = {
     teamId: number;
     memberRole: string;
     playerId: number;
+    dorsal: number;
     active: boolean;
 };
 
@@ -64,12 +65,20 @@ export const teamService = {
         return http.get<MyTeamDto>("/teams/my");
     },
 
+    getTeam(teamId: number) {
+        return http.get<MyTeamDto>(`/teams/${teamId}`);
+    },
+
+    getTeamMembers(teamId: number) {
+        return http.get<TeamMemberDto[]>(`/teams/${teamId}/members`);
+    },
+
     create(payload: CreateTeamRequest) {
         return http.post<MyTeamDto>("/teams", payload);
     },
 
     addMember(teamId: number, payload: AddMemberRequest) {
-        return http.post<AddMemberRequest>(`/teams/${teamId}/members`, payload);
+        return http.post<TeamMemberDto>(`/teams/${teamId}/members`, payload);
     },
 
     uploadPaymentProof(teamId: number, file: File) {

@@ -150,6 +150,8 @@ interface AddedPlayerDraft {
   playerId: number;
   playerName: string;
   playerEmail: string;
+  dorsal: number;
+  active: boolean;
 }
 
 const TEAM_CONTEXT_STORAGE_KEY = "techcup.teamContext";
@@ -465,9 +467,17 @@ function InscriptionModal({
     setMemberError("");
     if (draftPlayers.some((p) => p.playerId === Number(player.id))) return;
     if (draftPlayers.length >= 11) { setMemberError("Máximo 11 jugadores adicionales (1 capitán + 11 jugadores)"); return; }
-    setDraftPlayers((prev) => [...prev, { playerId: Number(player.id), playerName: player.nombre, playerEmail: player.email }]);
+    setDraftPlayers((prev) => [...prev, { playerId: Number(player.id), playerName: player.nombre, playerEmail: player.email, dorsal: 0, active: true }]);
     setSearchQuery("");
     setSearchResults([]);
+  };
+
+  const updateDraftDorsal = (playerId: number, dorsal: number) => {
+    setDraftPlayers((prev) => prev.map((p) => p.playerId === playerId ? { ...p, dorsal } : p));
+  };
+
+  const updateDraftActive = (playerId: number, active: boolean) => {
+    setDraftPlayers((prev) => prev.map((p) => p.playerId === playerId ? { ...p, active } : p));
   };
 
   const handleSubmit = async () => {
@@ -475,14 +485,21 @@ function InscriptionModal({
     const totalMembers = 1 + draftPlayers.length;
     if (totalMembers < 7) { setMemberError("El equipo debe tener mínimo 7 personas (incluyendo capitán)"); return; }
     if (totalMembers > 12) { setMemberError("El equipo no puede superar 12 personas"); return; }
-    if (!Number.isInteger(captainNumber) || captainNumber < 0 || captainNumber > 99) { setMemberError("El dorsal del capitán debe estar entre 0 y 99"); return; }
+    if (!Number.isInteger(captainNumber) || captainNumber < 1 || captainNumber > 99) { setMemberError("El dorsal del capitán debe estar entre 1 y 99"); return; }
+    const missingDorsal = draftPlayers.some((p) => !p.dorsal || p.dorsal < 1 || p.dorsal > 99);
+    if (missingDorsal) { setMemberError("Asigna un dorsal (1-99) a cada jugador antes de confirmar."); return; }
+    const dorsalSet = new Set<number>([captainNumber]);
+    for (const p of draftPlayers) {
+      if (dorsalSet.has(p.dorsal)) { setMemberError("Dos jugadores tienen el mismo dorsal. Cada dorsal debe ser único."); return; }
+      dorsalSet.add(p.dorsal);
+    }
     setSubmitting(true);
     setSubmitError("");
     try {
       const team = await teamService.create({ name: teamName.trim(), captainId: accountId, captainDorsal: captainNumber });
       await Promise.all(
         draftPlayers.map((p) =>
-          teamService.addMember(team.id, { teamId: team.id, memberRole: "PLAYER", playerId: p.playerId, active: true }).catch(() => {})
+          teamService.addMember(team.id, { teamId: team.id, memberRole: "PLAYER", playerId: p.playerId, dorsal: p.dorsal, active: p.active }).catch(() => {})
         )
       );
       const members: TeamRosterMember[] = [
@@ -669,11 +686,32 @@ function InscriptionModal({
                         <p className="text-xs" style={{ fontWeight: 700, color: "#6C757D" }}>Jugadores añadidos ({draftPlayers.length})</p>
                         <AnimatePresence>
                           {draftPlayers.map((player) => (
-                            <motion.div key={player.playerId} initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.22 }} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-black/6 bg-white">
+                            <motion.div key={player.playerId} initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.22 }} className="flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl border border-black/6 bg-white">
                               <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{player.playerName.charAt(0).toUpperCase()}</div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.playerName}</p>
                                 <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>{player.playerEmail}</p>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={99}
+                                  value={player.dorsal || ""}
+                                  placeholder="#"
+                                  onChange={(e) => updateDraftDorsal(player.playerId, Number(e.target.value) || 0)}
+                                  className="w-14 rounded-lg border px-2 py-1 text-xs text-center outline-none"
+                                  style={{ borderColor: player.dorsal >= 1 ? P.info : P.primary, fontWeight: 700 }}
+                                />
+                                <label className="flex items-center gap-1 cursor-pointer text-xs select-none flex-shrink-0" style={{ color: P.default, fontWeight: 600 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={player.active}
+                                    onChange={(e) => updateDraftActive(player.playerId, e.target.checked)}
+                                    className="w-3.5 h-3.5 rounded"
+                                  />
+                                  Activo
+                                </label>
                               </div>
                               <button onClick={() => setDraftPlayers((prev) => prev.filter((p) => p.playerId !== player.playerId))} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors duration-150 flex-shrink-0">
                                 <Trash2 className="w-3.5 h-3.5" style={{ color: P.default }} />
