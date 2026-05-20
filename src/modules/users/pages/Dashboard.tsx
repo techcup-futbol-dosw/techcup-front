@@ -148,7 +148,8 @@ interface TeamRosterMember {
 
 interface AddedPlayerDraft {
   playerId: number;
-  jerseyNumber: number;
+  playerName: string;
+  playerEmail: string;
 }
 
 const TEAM_CONTEXT_STORAGE_KEY = "techcup.teamContext";
@@ -427,18 +428,29 @@ function InscriptionModal({
   const [captainNumber, setCaptainNumber] = useState<number>(10);
   const [draftPlayers, setDraftPlayers] = useState<AddedPlayerDraft[]>([]);
   const [memberError, setMemberError] = useState("");
-  const [playerIdInput, setPlayerIdInput] = useState("");
-  const [jerseyInput, setJerseyInput] = useState(11);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PlayerDto[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
 
   const validTeamName = /^[A-Za-zÀ-ÿ0-9]+(?:[\s-][A-Za-zÀ-ÿ0-9]+)*$/;
 
-  const getNextJersey = () => {
-    const used = new Set<number>([captainNumber, ...draftPlayers.map((m) => m.jerseyNumber)]);
-    for (let i = 0; i <= 99; i += 1) { if (!used.has(i)) return i; }
-    return 0;
-  };
+  useEffect(() => {
+    if (!searchQuery.trim()) { setSearchResults([]); return; }
+    const t = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const results = await playerService.search({ query: searchQuery.trim(), size: 5 });
+        setSearchResults(results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const validateStepOne = () => {
     const normalized = teamName.trim();
@@ -449,23 +461,13 @@ function InscriptionModal({
     return true;
   };
 
-  const handleAddMember = () => {
-    const pid = parseInt(playerIdInput.trim(), 10);
-    const jersey = Number(jerseyInput);
+  const handleAddPlayer = (player: PlayerDto) => {
     setMemberError("");
-    if (!playerIdInput.trim()) return;
-    if (isNaN(pid) || pid <= 0) { setMemberError("Ingresa un ID de jugador válido"); return; }
-    if (draftPlayers.length >= 11) { setMemberError("Máximo 12 personas por equipo (1 capitán + 11 jugadores)"); return; }
-    if (draftPlayers.some((m) => m.playerId === pid)) { setMemberError("Este jugador ya fue añadido"); return; }
-    if (!Number.isInteger(jersey) || jersey < 0 || jersey > 99) { setMemberError("El dorsal debe estar entre 0 y 99"); return; }
-    if (jersey === captainNumber || draftPlayers.some((m) => m.jerseyNumber === jersey)) { setMemberError("Ese dorsal ya está asignado en el equipo"); return; }
-    setDraftPlayers((prev) => [...prev, { playerId: pid, jerseyNumber: jersey }]);
-    setPlayerIdInput("");
-    setJerseyInput(getNextJersey());
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") { e.preventDefault(); handleAddMember(); }
+    if (draftPlayers.some((p) => p.playerId === Number(player.id))) return;
+    if (draftPlayers.length >= 11) { setMemberError("Máximo 11 jugadores adicionales (1 capitán + 11 jugadores)"); return; }
+    setDraftPlayers((prev) => [...prev, { playerId: Number(player.id), playerName: player.nombre, playerEmail: player.email }]);
+    setSearchQuery("");
+    setSearchResults([]);
   };
 
   const handleSubmit = async () => {
@@ -485,7 +487,7 @@ function InscriptionModal({
       );
       const members: TeamRosterMember[] = [
         { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
-        ...draftPlayers.map((p, i) => ({ id: i + 2, name: `Jugador #${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.jerseyNumber })),
+        ...draftPlayers.map((p, i) => ({ id: i + 2, name: p.playerName, email: p.playerEmail, role: "Jugador" as const, jerseyNumber: 0 })),
       ];
       onClose();
       onSuccess({ teamName: team.name, members, teamId: team.id });
@@ -608,29 +610,58 @@ function InscriptionModal({
                       <input type="number" min={0} max={99} value={captainNumber} onChange={(e) => { const v = Number(e.target.value); setCaptainNumber(Number.isNaN(v) ? 0 : v); }} className="w-full sm:w-40 px-4 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} />
                     </div>
 
-                    <div>
-                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Añadir jugador al equipo</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-2">
+                    <div className="relative">
+                      <label className="block text-xs mb-1.5" style={{ fontWeight: 700, color: "#6C757D" }}>Buscar jugador por nombre</label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: P.default }} />
                         <input
-                          type="number"
-                          placeholder="ID del jugador"
-                          value={playerIdInput}
-                          onChange={(e) => { setPlayerIdInput(e.target.value); if (memberError) setMemberError(""); }}
-                          onKeyDown={handleKeyDown}
-                          className="flex-1 px-4 py-3 rounded-xl border text-sm bg-white outline-none transition-all duration-200"
-                          style={{ borderColor: playerIdInput ? P.info : "#E9ECEF", fontWeight: 500, boxShadow: playerIdInput ? `0 0 0 3px ${P.info}15` : "none" }}
+                          type="text"
+                          placeholder="Ej. Juan García"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-9 pr-4 py-3 rounded-xl border text-sm bg-white outline-none transition-all duration-200"
+                          style={{ borderColor: searchQuery ? P.info : "#E9ECEF", fontWeight: 500, boxShadow: searchQuery ? `0 0 0 3px ${P.info}15` : "none" }}
                         />
-                        <input type="number" min={0} max={99} value={jerseyInput} onChange={(e) => { const v = Number(e.target.value); setJerseyInput(Number.isNaN(v) ? 0 : v); if (memberError) setMemberError(""); }} className="px-3 py-3 rounded-xl border text-sm bg-white outline-none" style={{ borderColor: "#E9ECEF", fontWeight: 600 }} aria-label="Dorsal" />
-                        <motion.button whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }} onClick={handleAddMember} className="w-11 h-11 rounded-xl flex items-center justify-center text-white flex-shrink-0" style={{ backgroundColor: P.info }}>
-                          <UserPlus className="w-5 h-5" />
-                        </motion.button>
+                        {isSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin" style={{ color: P.default }} />}
                       </div>
-                      {memberError && (
-                        <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 500 }}>
-                          <AlertCircle className="w-3 h-3" />{memberError}
-                        </motion.p>
-                      )}
-                      <p className="text-xs mt-1.5" style={{ color: P.default, fontWeight: 500 }}>Presiona Enter o + para añadir. Regla del torneo: entre 7 y 12 personas por equipo.</p>
+
+                      <AnimatePresence>
+                        {searchResults.length > 0 && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+                            className="absolute left-0 right-0 z-10 mt-1 bg-white rounded-2xl overflow-hidden"
+                            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)", border: "1px solid rgba(0,0,0,0.07)" }}
+                          >
+                            {searchResults.map((player) => {
+                              const alreadyAdded = draftPlayers.some((p) => p.playerId === Number(player.id));
+                              return (
+                                <button
+                                  key={player.id}
+                                  type="button"
+                                  onClick={() => handleAddPlayer(player)}
+                                  disabled={alreadyAdded}
+                                  className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors duration-150 hover:bg-[#F8F9FA] disabled:opacity-50 disabled:cursor-default"
+                                  style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}
+                                >
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: alreadyAdded ? P.success : P.info, fontWeight: 700 }}>
+                                    {alreadyAdded ? <Check className="w-4 h-4" /> : player.nombre.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.nombre}</p>
+                                    <p className="text-xs truncate" style={{ color: P.default, fontWeight: 500 }}>{player.posicion} · {player.semestre}° semestre</p>
+                                  </div>
+                                  {!alreadyAdded && (
+                                    <UserPlus className="w-4 h-4 flex-shrink-0" style={{ color: P.info }} />
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {memberError && <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{memberError}</p>}
+                      <p className="text-xs mt-1.5" style={{ color: P.default, fontWeight: 500 }}>Los jugadores se añaden directamente al equipo. Regla del torneo: entre 7 y 12 personas.</p>
                     </div>
 
                     {draftPlayers.length > 0 && (
@@ -639,10 +670,10 @@ function InscriptionModal({
                         <AnimatePresence>
                           {draftPlayers.map((player) => (
                             <motion.div key={player.playerId} initial={{ opacity: 0, height: 0, y: -8 }} animate={{ opacity: 1, height: "auto", y: 0 }} exit={{ opacity: 0, height: 0, y: -8 }} transition={{ duration: 0.22 }} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-black/6 bg-white">
-                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{player.jerseyNumber}</div>
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs" style={{ backgroundColor: P.info, fontWeight: 700 }}>{player.playerName.charAt(0).toUpperCase()}</div>
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm" style={{ fontWeight: 600 }}>Jugador ID: {player.playerId}</p>
-                                <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>Jugador · #{player.jerseyNumber}</p>
+                                <p className="text-sm truncate" style={{ fontWeight: 600 }}>{player.playerName}</p>
+                                <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>{player.playerEmail}</p>
                               </div>
                               <button onClick={() => setDraftPlayers((prev) => prev.filter((p) => p.playerId !== player.playerId))} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-red-50 transition-colors duration-150 flex-shrink-0">
                                 <Trash2 className="w-3.5 h-3.5" style={{ color: P.default }} />
@@ -682,6 +713,7 @@ function InscriptionModal({
                         }
                       </motion.button>
                     </div>
+                    {submitError && <p className="text-xs mt-1.5 flex items-center gap-1" style={{ color: P.primary, fontWeight: 600 }}><AlertCircle className="w-3 h-3" />{submitError}</p>}
                   </motion.div>
                 )}
               </AnimatePresence>
