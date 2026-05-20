@@ -33,7 +33,7 @@ export type MatchDetailDto = {
     status: MatchStatus;
 };
 
-export type MatchEventType = "gol" | "amarilla" | "roja" | "esquina" | "falta";
+export type MatchEventType = "gol" | "amarilla" | "roja";
 
 export type AddMatchEventRequest = {
     type: MatchEventType;

@@ -128,8 +128,6 @@ interface TeamMemberStats {
   goals: number;
   yellowCards: number;
   redCards: number;
-  corners: number;
-  fouls: number;
 }
 
 interface TeamPerformance {
@@ -170,7 +168,7 @@ interface StoredTeamContext {
 const createTeamSchedule = (_teamName: string): TeamScheduleItem[] => [];
 
 const createTeamPerformance = (roster: TeamRosterMember[]): TeamPerformance => ({
-  members: roster.map((m) => ({ id: m.id, name: m.name, role: m.role, goals: 0, yellowCards: 0, redCards: 0, corners: 0, fouls: 0 })),
+  members: roster.map((m) => ({ id: m.id, name: m.name, role: m.role, goals: 0, yellowCards: 0, redCards: 0 })),
   totalPoints: 0,
 });
 
@@ -715,8 +713,6 @@ function TeamScoreModal({ teamName, performance, onClose }: { teamName: string; 
   const totalGoals   = performance.members.reduce((s, m) => s + m.goals, 0);
   const totalYellow  = performance.members.reduce((s, m) => s + m.yellowCards, 0);
   const totalRed     = performance.members.reduce((s, m) => s + m.redCards, 0);
-  const totalCorners = performance.members.reduce((s, m) => s + m.corners, 0);
-  const totalFouls   = performance.members.reduce((s, m) => s + m.fouls, 0);
 
   return (
     <>
@@ -742,7 +738,7 @@ function TeamScoreModal({ teamName, performance, onClose }: { teamName: string; 
             <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="border-b border-black/8">
-                  {["Integrante", "Goles", "Amarillas", "Rojas", "Tiros de esquina", "Faltas"].map((h) => (
+                  {["Integrante", "Goles", "Amarillas", "Rojas"].map((h) => (
                     <th key={h} className={`py-2 text-xs ${h === "Integrante" ? "text-left" : "text-center"}`} style={{ color: P.default, fontWeight: 700 }}>{h}</th>
                   ))}
                 </tr>
@@ -754,7 +750,7 @@ function TeamScoreModal({ teamName, performance, onClose }: { teamName: string; 
                       <p style={{ fontWeight: 700, color: P.textPrimary, fontSize: "0.9rem" }}>{m.name}</p>
                       <p style={{ fontWeight: 600, color: P.default, fontSize: "0.72rem" }}>{m.role}</p>
                     </td>
-                    {[m.goals, m.yellowCards, m.redCards, m.corners, m.fouls].map((v, i) => (
+                    {[m.goals, m.yellowCards, m.redCards].map((v, i) => (
                       <td key={i} className="text-center py-3" style={{ fontWeight: 700 }}>{v}</td>
                     ))}
                   </tr>
@@ -767,8 +763,6 @@ function TeamScoreModal({ teamName, performance, onClose }: { teamName: string; 
               { label: "Goles",     value: totalGoals,   color: P.info },
               { label: "Amarillas", value: totalYellow,  color: P.secondary },
               { label: "Rojas",     value: totalRed,     color: P.primary },
-              { label: "Esquinas",  value: totalCorners, color: P.textPrimary },
-              { label: "Faltas",    value: totalFouls,   color: P.textPrimary },
             ].map(({ label, value, color }) => (
               <div key={label} className="rounded-xl px-3 py-2" style={{ backgroundColor: `${color}10` }}>
                 <p className="text-[11px]" style={{ color: P.default, fontWeight: 700 }}>{label}</p>
