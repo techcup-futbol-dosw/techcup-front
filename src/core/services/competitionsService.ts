@@ -44,13 +44,19 @@ export async function loadMatchesIntoCache(tournamentId: string): Promise<void> 
     venue: m.fieldId ?? "Por confirmar",
     status:      statusLabel[m.status] ?? m.status,
     statusColor: statusColor[m.status] ?? "#6E6E73",
-    score1: m.status !== "SCHEDULED" ? m.homeScore : null,
-    score2: m.status !== "SCHEDULED" ? m.awayScore : null,
+    score1: m.status === "SCHEDULED" ? null : m.homeScore,
+    score2: m.status === "SCHEDULED" ? null : m.awayScore,
     stats: null,
   }));
 
   writeUICache("techcup.ui.matches", mapped);
 }
+
+const getTrend = (index: number, total: number): string => {
+  if (index === 0) return "up";
+  if (index === total - 1) return "down";
+  return "neutral";
+};
 
 export async function loadStandingsIntoCache(tournamentId: string): Promise<void> {
   const data = await competitionsRequest<any[]>(`/api/matches/standings/${tournamentId}`);
@@ -64,7 +70,7 @@ export async function loadStandingsIntoCache(tournamentId: string): Promise<void
     pp: s.matchesLost,
     gf: s.goalsFor,
     gc: s.goalsAgainst,
-    trend: index === 0 ? "up" : index === data.length - 1 ? "down" : "neutral",
+    trend: getTrend(index, data.length),
   }));
 
   writeUICache("techcup.ui.scores", mapped);
