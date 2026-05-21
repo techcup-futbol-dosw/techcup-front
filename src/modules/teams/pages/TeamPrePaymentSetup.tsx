@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { AlertCircle, ArrowLeft, CheckCircle2, Palette, Shield, Users, Shirt, Upload, Search } from "lucide-react";
 import { readUICache, writeUICache } from "@/core/utils/uiCache";
 import { teamService } from "@/modules/teams/services/teamService";
-import { playerService } from "@/modules/users/services/playerService";
 
 const P = {
   primary: "#B81C1C",
@@ -45,7 +44,6 @@ interface TeamSetupState {
   primaryColor?: string;
   secondaryColor?: string;
   logoUrl?: string | null;
-  pendingInvites?: Array<{ email: string; jerseyNumber: number }>;
 }
 
 const TEAM_CONTEXT_STORAGE_KEY = "techcup.teamContext";
@@ -78,7 +76,6 @@ export function TeamPrePaymentSetup() {
   const location = useLocation();
   const navigate = useNavigate();
   const state = (location.state as TeamSetupState | undefined) ?? {};
-  const processedInvitesRef = useRef(false);
 
   const loadStoredTeamContext = () => {
     return readUICache<StoredTeamContext | null>(TEAM_CONTEXT_STORAGE_KEY, null);
@@ -87,7 +84,7 @@ export function TeamPrePaymentSetup() {
   const storedTeamContext = loadStoredTeamContext();
 
   const [teamId, setTeamId] = useState<number | null>(state.teamId ?? storedTeamContext?.teamId ?? null);
-  const [roleInTeam, setRoleInTeam] = useState<RoleType>(state.roleInTeam ?? storedTeamContext?.roleInTeam ?? "capitan");
+  const [roleInTeam] = useState<RoleType>(state.roleInTeam ?? storedTeamContext?.roleInTeam ?? "capitan");
   const [teamStatus, setTeamStatus] = useState<TeamStatus>(state.teamStatus ?? storedTeamContext?.teamStatus ?? "pending-payment");
   const isLockedByPayment = teamStatus === "in-review" || teamStatus === "active";
   const canEdit = roleInTeam === "capitan" && !isLockedByPayment;
@@ -108,9 +105,10 @@ export function TeamPrePaymentSetup() {
   const [lineupNotice, setLineupNotice] = useState<string | null>(null);
   const [memberNotice, setMemberNotice] = useState<string | null>(null);
   const [memberError, setMemberError] = useState<string | null>(null);
-  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberPlayerId, setNewMemberPlayerId] = useState("");
   const [newMemberJersey, setNewMemberJersey] = useState("");
-  const [isInviting, setIsInviting] = useState(false);
+  const [newMemberActive, setNewMemberActive] = useState(true);
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [jerseyDrafts, setJerseyDrafts] = useState<Record<number, number>>(() =>
     (state.teamMembers?.length ? state.teamMembers : defaultMembers).reduce<Record<number, number>>((acc, member) => {
       acc[member.id] = member.jerseyNumber;
@@ -155,11 +153,11 @@ export function TeamPrePaymentSetup() {
         setMembers((prev) => {
           if (prev.length > 0) return prev;
           return backendMembers.map((member) => ({
-            id: member.playerId,
+            id: member.playerId ?? member.id,
             name: member.memberRole === "capitan" ? "Capitán" : `Jugador ${member.playerId}`,
             email: "",
             role: member.memberRole === "capitan" ? "Capitán" : "Jugador",
-            jerseyNumber: 0,
+            jerseyNumber: member.dorsal ?? 0,
           }));
         });
       })
@@ -169,47 +167,6 @@ export function TeamPrePaymentSetup() {
       active = false;
     };
   }, [teamId]);
-
-  useEffect(() => {
-    if (!teamId || processedInvitesRef.current || !state.pendingInvites?.length) return;
-
-    processedInvitesRef.current = true;
-
-    const processInvites = async () => {
-      for (const invite of state.pendingInvites ?? []) {
-        const email = invite.email.trim().toLowerCase();
-
-        try {
-          const players = await playerService.search({ query: email, size: 20 });
-          const matchedPlayer = players.find((player) => player.email.toLowerCase() === email) ?? players[0];
-
-          if (!matchedPlayer) {
-            throw new Error("PLAYER_NOT_FOUND");
-          }
-
-          await teamService.inviteMember(teamId, { teamId, playerId: Number(matchedPlayer.id) });
-
-          setMembers((prev) => {
-            if (prev.some((member) => member.email.toLowerCase() === email)) return prev;
-            return [
-              ...prev,
-              {
-                id: Number(matchedPlayer.id),
-                name: matchedPlayer.nombre,
-                email: matchedPlayer.email,
-                role: "Jugador",
-                jerseyNumber: invite.jerseyNumber,
-              },
-            ];
-          });
-        } catch {
-          setMemberError((prev) => prev || `No se pudo invitar a ${email}.`);
-        }
-      }
-    };
-
-    processInvites().catch(() => {});
-  }, [teamId, state.pendingInvites]);
 
   const persistTeamContext = (nextContext: StoredTeamContext) => {
     writeUICache(TEAM_CONTEXT_STORAGE_KEY, nextContext);
@@ -304,73 +261,69 @@ export function TeamPrePaymentSetup() {
   const addMember = async () => {
     if (!canEdit) return;
 
-    const email = newMemberEmail.trim().toLowerCase();
+    const playerId = Number(newMemberPlayerId.trim());
     const jersey = Number(newMemberJersey);
 
     if (members.length >= 12) {
       setMemberError("No puedes superar 12 integrantes en la plantilla.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setMemberError("Ingresa un correo válido.");
+    if (!Number.isInteger(playerId) || playerId < 1) {
+      setMemberError("El ID del jugador debe ser un número entero mayor a 0.");
       return;
     }
-    if (!/\.edu(\.[a-z]{2})?$/i.test(email)) {
-      setMemberError("El correo del jugador debe ser institucional (.edu).");
+    if (members.some((member) => member.id === playerId)) {
+      setMemberError("Ese jugador ya está en la plantilla.");
       return;
     }
-    if (members.some((member) => member.email.toLowerCase() === email)) {
-      setMemberError("Ese correo ya está registrado en la plantilla.");
-      return;
-    }
-    if (!Number.isInteger(jersey) || jersey < 0 || jersey > 99) {
-      setMemberError("El dorsal debe estar entre 0 y 99.");
+    if (!Number.isInteger(jersey) || jersey < 1 || jersey > 99) {
+      setMemberError("El dorsal debe estar entre 1 y 99.");
       return;
     }
     if (members.some((member) => member.jerseyNumber === jersey)) {
-      setMemberError("Ese dorsal ya está asignado.");
+      setMemberError("Ese dorsal ya está asignado a otro miembro.");
       return;
     }
-
     if (!teamId) {
-      setMemberError("No se encontró el equipo para enviar la invitación.");
+      setMemberError("No se encontró el equipo.");
       return;
     }
 
-    setIsInviting(true);
+    setIsAddingMember(true);
+    setMemberError(null);
 
     try {
-      const players = await playerService.search({ query: email, size: 20 });
-      const matchedPlayer = players.find((player) => player.email.toLowerCase() === email) ?? players[0];
+      const result = await teamService.addMember(teamId, {
+        memberRole: "PLAYER",
+        playerId,
+        dorsal: jersey,
+        active: newMemberActive,
+      });
 
-      if (!matchedPlayer) {
-        setMemberError("No encontramos un jugador con ese correo.");
-        return;
-      }
-
-      await teamService.inviteMember(teamId, { teamId, playerId: Number(matchedPlayer.id) });
+      const parsedMemberId = Number(result.playerId ?? playerId);
+      const memberId = Number.isFinite(parsedMemberId) && parsedMemberId > 0 ? parsedMemberId : Date.now();
 
       const newMember: TeamRosterMember = {
-        id: Number(matchedPlayer.id),
-        name: matchedPlayer.nombre,
-        email: matchedPlayer.email,
+        id: memberId,
+        name: `Jugador ${playerId}`,
+        email: "",
         role: "Jugador",
-        jerseyNumber: jersey,
+        jerseyNumber: result.dorsal ?? jersey,
       };
 
       setMembers((prev) => {
-        if (prev.some((member) => member.email.toLowerCase() === email)) return prev;
+        if (prev.some((member) => member.id === newMember.id)) return prev;
         return [...prev, newMember];
       });
       setJerseyDrafts((prev) => ({ ...prev, [newMember.id]: jersey }));
-      setNewMemberEmail("");
+      setNewMemberPlayerId("");
       setNewMemberJersey("");
-      setMemberError(null);
-      setMemberNotice("Invitación enviada correctamente.");
+      setNewMemberActive(true);
+      setMemberNotice("Jugador añadido correctamente.");
     } catch {
-      setMemberError("No se pudo enviar la invitación. Revisa el correo e inténtalo de nuevo.");
+      setMemberError("No se pudo añadir el jugador. Verifica el ID, dorsal y que no sea miembro activo ya.");
     } finally {
-      setIsInviting(false);
+      setIsAddingMember(false);
     }
   };
 
@@ -650,56 +603,81 @@ export function TeamPrePaymentSetup() {
           </p>
 
           <div className="rounded-2xl border p-3 mb-4" style={{ borderColor: "rgba(0,0,0,0.08)", backgroundColor: "#FAFAFA" }}>
-            <p className="text-xs mb-2" style={{ color: P.textPrimary, fontWeight: 700 }}>Agregar jugador</p>
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_auto_auto] gap-2">
-              <input
-                disabled={!canEdit}
-                value={newMemberEmail}
-                onChange={(event) => setNewMemberEmail(event.target.value)}
-                placeholder="correo@mail.edu"
-                className="rounded-lg border px-2 py-1.5 text-sm"
-                style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
-              />
-              <input
-                disabled={!canEdit}
-                type="number"
-                min={0}
-                max={99}
-                value={newMemberJersey}
-                onChange={(event) => setNewMemberJersey(event.target.value)}
-                placeholder="Dorsal"
-                className="rounded-lg border px-2 py-1.5 text-sm"
-                style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
-              />
-              <button
-                type="button"
-                disabled={!canEdit || members.length >= 12 || isInviting}
-                onClick={addMember}
-                className="rounded-lg border px-4 py-1.5 text-xs whitespace-nowrap"
-                style={{
-                  borderColor: `${P.info}45`,
-                  color: P.info,
-                  fontWeight: 800,
-                  backgroundColor: "white",
-                  opacity: !canEdit || members.length >= 12 || isInviting ? 0.45 : 1,
-                }}
-              >
-                {isInviting ? "Invitando..." : "Agregar"}
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/player-search", { state: { teamId, teamName } })}
-                className="rounded-lg border px-4 py-1.5 text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
-                style={{
-                  borderColor: `${P.primary}45`,
-                  color: P.primary,
-                  fontWeight: 800,
-                  backgroundColor: "white",
-                }}
-              >
-                <Search style={{ width: 12, height: 12 }} />
-                Buscar jugador
-              </button>
+            <p className="text-xs mb-1" style={{ color: P.textPrimary, fontWeight: 700 }}>Añadir miembro</p>
+            <p className="text-xs mb-3" style={{ color: P.default, fontWeight: 500 }}>
+              Ingresa el ID único del jugador y asígnale un dorsal. El rol se establece como <span style={{ fontWeight: 700 }}>PLAYER</span> automáticamente.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: P.default, fontWeight: 700 }}>ID del jugador *</label>
+                <input
+                  disabled={!canEdit}
+                  value={newMemberPlayerId}
+                  onChange={(event) => setNewMemberPlayerId(event.target.value)}
+                  type="number"
+                  min={1}
+                  placeholder="Ej. 42"
+                  className="w-full rounded-lg border px-2 py-1.5 text-sm"
+                  style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: P.default, fontWeight: 700 }}>Dorsal * (1–99)</label>
+                <input
+                  disabled={!canEdit}
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={newMemberJersey}
+                  onChange={(event) => setNewMemberJersey(event.target.value)}
+                  placeholder="Ej. 10"
+                  className="w-full rounded-lg border px-2 py-1.5 text-sm"
+                  style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 select-none" style={{ cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.45 }}>
+                <input
+                  disabled={!canEdit}
+                  type="checkbox"
+                  checked={newMemberActive}
+                  onChange={(event) => setNewMemberActive(event.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <span className="text-xs" style={{ color: P.textPrimary, fontWeight: 700 }}>Activo</span>
+              </label>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  disabled={!canEdit || members.length >= 12 || isAddingMember}
+                  onClick={addMember}
+                  className="rounded-lg border px-4 py-1.5 text-xs whitespace-nowrap"
+                  style={{
+                    borderColor: `${P.info}45`,
+                    color: P.info,
+                    fontWeight: 800,
+                    backgroundColor: "white",
+                    opacity: !canEdit || members.length >= 12 || isAddingMember ? 0.45 : 1,
+                  }}
+                >
+                  {isAddingMember ? "Añadiendo..." : "Añadir miembro"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/player-search", { state: { teamId, teamName } })}
+                  className="rounded-lg border px-4 py-1.5 text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  style={{
+                    borderColor: `${P.primary}45`,
+                    color: P.primary,
+                    fontWeight: 800,
+                    backgroundColor: "white",
+                  }}
+                >
+                  <Search style={{ width: 12, height: 12 }} />
+                  Buscar jugador
+                </button>
+              </div>
             </div>
             {memberError && <p className="text-xs mt-2" style={{ color: P.primary, fontWeight: 700 }}>{memberError}</p>}
             {memberNotice && <p className="text-xs mt-2" style={{ color: P.success, fontWeight: 700 }}>{memberNotice}</p>}
