@@ -1,7 +1,7 @@
 /**
  * @file src/modules/tournament/pages/CreateTournament.tsx
  */
-import { sanitizeFileName } from '@/core/utils/fileutils';
+
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
