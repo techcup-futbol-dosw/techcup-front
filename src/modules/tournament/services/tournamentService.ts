@@ -1,4 +1,5 @@
 import { http } from "@/core/api/http";
+import { sanitizeFileName } from "@/core/utils/fileutils";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -128,8 +129,10 @@ export const tournamentService = {
     },
 
     uploadRegulation(file: File) {
+        const sanitizedName = sanitizeFileName(file.name);
+        const renamedFile = new File([file], sanitizedName, { type: file.type });
         const body = new FormData();
-        body.append("file", file);
+        body.append("file", renamedFile);
         return http.post<{ url: string; fileName: string }>("/tournaments/regulation/upload", body);
     },
 
