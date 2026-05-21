@@ -1289,17 +1289,8 @@ export function Dashboard() {
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    tournamentService.list()
-      .then((tournaments) => {
-        const active = tournaments.find(
-          (t) => t.status === "in_progress" || t.status === "active"
-        );
-        if (!active) return;
-        const id = String(active.id);
-        loadMatchesIntoCache(id).catch(() => {});
-        loadStandingsIntoCache(id).catch(() => {});
-      })
-      .catch(() => {});
+    loadMatchesIntoCache("1").catch(() => {});
+    loadStandingsIntoCache("1").catch(() => {});
   }, []);
 
   // Inscription
