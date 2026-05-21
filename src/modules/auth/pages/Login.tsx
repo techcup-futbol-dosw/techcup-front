@@ -290,6 +290,7 @@ export function Login() {
 
                   {/* Password */}
                   <div>
+                    { /* olvidar contraseña
                     <div className="flex justify-between items-center mb-1.5">
                       <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Contraseña</label>
                       <button
@@ -299,7 +300,7 @@ export function Login() {
                       >
                         ¿Olvidaste tu contraseña?
                       </button>
-                    </div>
+                    </div> */}
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
                       <input
@@ -388,8 +389,8 @@ export function Login() {
                 <p className="mt-4 text-center">
                   <Link to="/" style={{ fontSize: "0.82rem", color: "#8A8A8E", fontWeight: 500 }}>← Volver al inicio</Link>
                 </p>
-
-                {/* Quick access buttons */}
+                 
+                {/* Quick access buttons
                 <div className="mt-6 pt-5" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                   <p className="text-center mb-3" style={{ fontSize: "0.72rem", fontWeight: 600, color: "#8A8A8E", letterSpacing: "0.08em", textTransform: "uppercase" }}>
                     Acceso rápido (demo)
@@ -420,7 +421,7 @@ export function Login() {
                       </motion.button>
                     ))}
                   </div>
-                </div>
+                </div> */}
               </motion.div>
             )}
 
