@@ -22,6 +22,8 @@ const P = {
 interface MatchStats {
   yellowCards: [number, number];
   redCards: [number, number];
+  corners: [number, number];
+  fouls: [number, number];
 }
 interface Match {
   id: number;
@@ -74,6 +76,8 @@ function StatRow({ label, val1, val2, statColor }: { label: string; val1: number
 
 const YellowCardIcon = () => <svg width="11" height="14" viewBox="0 0 12 16"><rect width="12" height="16" rx="2" fill={P.secondary} /></svg>;
 const RedCardIcon = () => <svg width="11" height="14" viewBox="0 0 12 16"><rect width="12" height="16" rx="2" fill={P.primary} /></svg>;
+const CornerIcon = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke={P.success} strokeWidth="2" strokeLinecap="round"><path d="M2 2 L12 2 L12 12" /><path d="M2 2 Q12 2 12 12" strokeDasharray="2 2" /></svg>;
+const FoulIcon = () => <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke={P.info} strokeWidth="1.8" strokeLinecap="round"><circle cx="7" cy="3.5" r="2" /><path d="M3.5 13 C3.5 9.5 10.5 9.5 10.5 13" /><line x1="7" y1="5.5" x2="6" y2="9" /><line x1="6" y1="9" x2="8" y2="11" /></svg>;
 
 function SectionLabel({ text, color }: { text: string; color: string }) {
   return (
@@ -194,6 +198,8 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
                 {[
                   { icon: <YellowCardIcon />, label: "Tarjetas Amarillas", color: P.secondary, vals: match.stats.yellowCards },
                   { icon: <RedCardIcon />, label: "Tarjetas Rojas", color: P.primary, vals: match.stats.redCards },
+                  { icon: <CornerIcon />, label: "Tiros de Esquina", color: P.success, vals: match.stats.corners },
+                  { icon: <FoulIcon />, label: "Faltas", color: P.info, vals: match.stats.fouls },
                 ].map((s) => (
                   <div
                     key={s.label}
