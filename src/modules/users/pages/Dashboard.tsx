@@ -930,8 +930,8 @@ export default function Dashboard() {
         setTeamPrimaryColor(team.primaryColor ?? P.primary);
         setTeamSecondaryColor(team.secondaryColor ?? P.secondary);
         setJoinedAt(team.joinedAt);
-        setTeamMembers(team.members.map((m) => ({ id: m.id, name: m.name ?? "", email: m.email ?? "", role: m.role ?? "Jugador", jerseyNumber: m.jerseyNumber ?? 0 })));
-        setTeamSchedule(team.schedule);
+        setTeamMembers((team.members ?? []).map((m) => ({ id: m.id, name: m.name ?? "", email: m.email ?? "", role: m.role ?? "Jugador", jerseyNumber: m.jerseyNumber ?? 0 })));
+        setTeamSchedule(team.schedule ?? []);
       })
       .catch(() => {});
   }, [accountId]);

@@ -31,11 +31,11 @@ export type RoleInTeam = "capitan" | "jugador";
 export type MyTeamDto = {
     id: number;
     name: string;
-    roleInTeam: RoleInTeam;
     teamStatus: TeamStatus;
-    joinedAt: string;
-    members: TeamMemberDto[];
-    schedule: TeamScheduleItemDto[];
+    roleInTeam?: RoleInTeam;
+    joinedAt?: string;
+    members?: TeamMemberDto[];
+    schedule?: TeamScheduleItemDto[];
     primaryColor?: string;
     secondaryColor?: string;
     logoUrl?: string | null;
