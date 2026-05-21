@@ -75,7 +75,7 @@ export const teamService = {
     },
 
     create(payload: CreateTeamRequest) {
-        return http.post<MyTeamDto>("/api/teams", payload, { auth: false });
+        return http.post<MyTeamDto>("/api/teams", payload);
     },
 
     addMember(teamId: number, payload: AddMemberRequest) {
