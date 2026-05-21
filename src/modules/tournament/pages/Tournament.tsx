@@ -96,45 +96,30 @@ export function Tournament() {
   const [torneo, setTorneo] = useState<TorneoInfo | null>(null);
 
   useEffect(() => {
-    const userContext = sessionStorage.getItem("userContext");
-    if (!userContext) return;
-    const user = JSON.parse(userContext);
-    const organizerId = user.id;
-    tournamentService
-    .getByOrganizer(organizerId)
-    .then((list) => {
-      const active =
-        list.find(
-          (t) =>
-            t.status === "IN_PROGRESS" ||
-            t.status === "ACTIVE"
-        ) ?? list[0] ?? null;
-      if (!active) return;
-      const estadoMap: Record<string, TorneoEstado> = {
-        DRAFT: "Borrador",
-        ACTIVE: "Activo",
-        IN_PROGRESS: "En Progreso",
-        FINISHED: "Finalizado",
-      };
-      setTorneo({
-        nombre: active.name,
-        estado: estadoMap[active.status] ?? "Activo",
-        fechaInicio: active.startDate,
-        fechaFin: active.endDate,
-        fechaCierreInscripciones: active.endInscriptions,
-        cantidadEquipos: active.teams,
-        costo: active.cost,
-        reglamentoUrl: active.rulesUrl ?? null,
-        canchas: active.fields.map((c) => ({
-          id: c.id,
-          nombre: c.name,
-          descripcion: c.description,
-        })),
-      });
-    })
-    .catch(() => {});
+    tournamentService.list()
+      .then((list) => {
+        const active = list.find((t) => t.status === "in_progress" || t.status === "active") ?? list[0] ?? null;
+        if (!active) return;
+        const estadoMap: Record<string, TorneoEstado> = {
+          draft:       "Borrador",
+          active:      "Activo",
+          in_progress: "En Progreso",
+          finished:    "Finalizado",
+        };
+        setTorneo({
+          nombre:                    active.name,
+          estado:                    estadoMap[active.status] ?? "Activo",
+          fechaInicio:               active.startDate,
+          fechaFin:                  active.endDate,
+          fechaCierreInscripciones:  active.registrationCloseDate,
+          cantidadEquipos:           active.maxTeams,
+          costo:                     active.costPerTeam,
+          reglamentoUrl:             active.regulationFileName ?? null,
+          canchas:                   active.courts.map((c) => ({ id: c.id, nombre: c.name, descripcion: c.description })),
+        });
+      })
+      .catch(() => {});
   }, []);
-
 
   const estadoCfg = torneo ? estadoStyle[torneo.estado] : null;
 
