@@ -151,15 +151,8 @@ export function CreateTournament() {
     try {
       const { url } = await tournamentService.uploadRegulation(file);
       setFormData((prev) => ({ ...prev, reglamentoPdfUrl: url }));
-    } catch (error) {
-      let message = "Error al subir el PDF.";
-      if (error instanceof Error) {
-        message = error.message;
-      }
-      setErrors((p) => ({
-        ...p,
-        reglamentoPdfUrl: message,
-      }));
+    } catch {
+      setErrors((p) => ({ ...p, reglamentoPdfUrl: "Error al subir el PDF. Intenta de nuevo." }));
       setPdfFileName(null);
     } finally {
       setUploadingPdf(false);
@@ -220,52 +213,24 @@ export function CreateTournament() {
 
   // ── Guardar torneo ────────────────────────────────────────────────────
   const handleSave = async () => {
+    if (!validateForm()) return;
 
-  if (!validateForm()) return;
-
-  try {
-
-    await tournamentService.create({
-
-      name: formData.nombreTorneo.trim(),
-
-      teams: formData.cantidadEquipos,
-
-      startDate: formData.fechaInicio,
-
-      endDate: formData.fechaFin,
-
-      registrationCloseDate:
-        formData.fechaCierreInscripciones,
-
-      cost: formData.costoPorEquipo,
-
-      courtIds: formData.canchasIds,
-
-      regulationPdfUrl:
-        formData.reglamentoPdfUrl,
-    });
-
-    setSaved(true);
-
-    setTimeout(() => {
-      navigate("/organizer/tournaments");
-    }, 2000);
-
-  } catch (error) {
-
-    let message =
-      "Error al crear el torneo. Intenta de nuevo.";
-
-    if (error instanceof Error) {
-      message = error.message;
+    try {
+      await tournamentService.create({
+        name:                  formData.nombreTorneo.trim(),
+        maxTeams:              formData.cantidadEquipos,
+        startDate:             formData.fechaInicio,
+        endDate:               formData.fechaFin,
+        registrationCloseDate: formData.fechaCierreInscripciones,
+        costPerTeam:           formData.costoPorEquipo,
+        courtIds:              formData.canchasIds,
+        regulationPdfUrl:      formData.reglamentoPdfUrl,
+      });
+      setSaved(true);
+      setTimeout(() => navigate("/organizer/tournaments"), 2000);
+    } catch {
+      setErrors((p) => ({ ...p, general: "Error al crear el torneo. Intenta de nuevo." }));
     }
-
-    setErrors((prev) => ({
-      ...prev,
-      general: message,
-    }));
-  }
   };
 
   // ── Estilos compartidos ───────────────────────────────────────────────
@@ -572,26 +537,6 @@ export function CreateTournament() {
 
           </div>
 
-          {errors.general && (
-          <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 rounded-xl px-4 py-3 mt-6"
-            style={{
-              background: `${P.primary}12`,
-              border: `1px solid ${P.primary}30`,
-              color: P.primary,
-              fontWeight: 600,
-              fontSize: "0.85rem",
-            }}
-          >
-            <AlertCircle
-              style={{ width: 16, height: 16 }}
-            />
-
-            {errors.general}
-          </motion.div>
-        )}
           {/* ── Botón guardar ── */}
           <motion.button
             whileHover={{ scale: 1.02 }}
