@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { LandingPage } from "@/modules/auth/pages/LandingPage";
-import { Dashboard } from "@/modules/competition/pages/Dashboard";
+import Dashboard from "@/modules/users/pages/Dashboard";
 import { ArbitroDashboard } from "@/modules/teams/pages/ArbitroDashboard";
 import { OrganizerDashboard } from "@/modules/tournament/pages/OrganizerDashboard";
 import { CreateTournament } from "@/modules/tournament/pages/CreateTournament";
@@ -44,7 +44,8 @@ export const router = createBrowserRouter([
       {
         Component: RequireAuth,
         children: [
-          { path: "dashboard", Component: Dashboard },
+          { path: "dashboard", element: <Navigate to="/dashboard-player" replace /> },
+          { path: "dashboard-player", Component: Dashboard },
           { path: "dashboard-arbitro", Component: ArbitroDashboard },
           { path: "dashboard-arbitro/partido/:id", Component: MatchDetail },
           { path: "dashboard/team-setup", Component: TeamPrePaymentSetup },
