@@ -125,8 +125,6 @@ interface TeamMemberStats {
   goals: number;
   yellowCards: number;
   redCards: number;
-  corners: number;
-  fouls: number;
 }
 
 interface TeamPerformance {
@@ -169,8 +167,6 @@ const createTeamPerformance = (roster: TeamRosterMember[]): TeamPerformance => {
     goals: 0,
     yellowCards: 0,
     redCards: 0,
-    corners: 0,
-    fouls: 0,
   }));
 
   return {
@@ -1185,8 +1181,6 @@ function TeamScoreModal({
   const totalGoals = performance.members.reduce((sum, member) => sum + member.goals, 0);
   const totalYellow = performance.members.reduce((sum, member) => sum + member.yellowCards, 0);
   const totalRed = performance.members.reduce((sum, member) => sum + member.redCards, 0);
-  const totalCorners = performance.members.reduce((sum, member) => sum + member.corners, 0);
-  const totalFouls = performance.members.reduce((sum, member) => sum + member.fouls, 0);
 
   return (
     <>
@@ -1235,8 +1229,6 @@ function TeamScoreModal({
                   <th className="text-center py-2 text-xs" style={{ color: P.default, fontWeight: 700 }}>Goles</th>
                   <th className="text-center py-2 text-xs" style={{ color: P.default, fontWeight: 700 }}>Amarillas</th>
                   <th className="text-center py-2 text-xs" style={{ color: P.default, fontWeight: 700 }}>Rojas</th>
-                  <th className="text-center py-2 text-xs" style={{ color: P.default, fontWeight: 700 }}>Tiros de esquina</th>
-                  <th className="text-center py-2 text-xs" style={{ color: P.default, fontWeight: 700 }}>Faltas</th>
                 </tr>
               </thead>
               <tbody>
@@ -1249,8 +1241,6 @@ function TeamScoreModal({
                     <td className="text-center py-3" style={{ fontWeight: 700 }}>{member.goals}</td>
                     <td className="text-center py-3" style={{ fontWeight: 700 }}>{member.yellowCards}</td>
                     <td className="text-center py-3" style={{ fontWeight: 700 }}>{member.redCards}</td>
-                    <td className="text-center py-3" style={{ fontWeight: 700 }}>{member.corners}</td>
-                    <td className="text-center py-3" style={{ fontWeight: 700 }}>{member.fouls}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1269,14 +1259,6 @@ function TeamScoreModal({
             <div className="rounded-xl px-3 py-2" style={{ backgroundColor: `${P.primary}10` }}>
               <p className="text-[11px]" style={{ color: P.default, fontWeight: 700 }}>Rojas</p>
               <p style={{ fontWeight: 800, color: P.primary }}>{totalRed}</p>
-            </div>
-            <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "rgba(0,0,0,0.05)" }}>
-              <p className="text-[11px]" style={{ color: P.default, fontWeight: 700 }}>Esquinas</p>
-              <p style={{ fontWeight: 800, color: P.textPrimary }}>{totalCorners}</p>
-            </div>
-            <div className="rounded-xl px-3 py-2" style={{ backgroundColor: "rgba(0,0,0,0.05)" }}>
-              <p className="text-[11px]" style={{ color: P.default, fontWeight: 700 }}>Faltas</p>
-              <p style={{ fontWeight: 800, color: P.textPrimary }}>{totalFouls}</p>
             </div>
           </div>
         </div>

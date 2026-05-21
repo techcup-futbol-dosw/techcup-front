@@ -8,8 +8,6 @@ import { useParams, useNavigate } from "react-router";
 import { matchService, type MatchDetailDto } from "../services/matchService";
 import {
   ArrowLeft,
-  Flag,
-  AlertTriangle,
   Square,
   Clock,
   MapPin,
@@ -36,7 +34,7 @@ const P = {
 };
 
 // ── Event types ───────────────────────────────────
-type EventType = "gol" | "amarilla" | "roja" | "esquina" | "falta";
+type EventType = "gol" | "amarilla" | "roja";
 
 interface EventDef {
   type: EventType;
@@ -68,20 +66,6 @@ const eventDefs: EventDef[] = [
     color: P.primary,
     bg: "rgba(184,28,28,0.10)",
   },
-  {
-    type: "esquina",
-    label: "Tiro Esquina",
-    icon: <Flag className="w-3.5 h-3.5" style={{ color: P.info }} />,
-    color: P.info,
-    bg: "rgba(0,102,254,0.10)",
-  },
-  {
-    type: "falta",
-    label: "Falta",
-    icon: <AlertTriangle className="w-3.5 h-3.5" style={{ color: P.secondary }} />,
-    color: P.secondary,
-    bg: "rgba(196,132,29,0.10)",
-  },
 ];
 
 type TeamKey = "a" | "b";
@@ -98,7 +82,7 @@ interface EventLogItem {
 type Counters = Record<EventType, number>;
 
 const emptyCounters = (): Counters => ({
-  gol: 0, amarilla: 0, roja: 0, esquina: 0, falta: 0,
+  gol: 0, amarilla: 0, roja: 0,
 });
 
 const HALFTIME_DURATION = 15 * 60; // 15 min in seconds
