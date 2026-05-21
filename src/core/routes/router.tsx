@@ -23,6 +23,7 @@ import { Tournament } from "@/modules/tournament/pages/Tournament";
 import { RootLayout } from "./RootLayout";
 import { RequireAuth } from "@/core/auth/RequireAuth";
 import { RequirePermission } from "@/core/auth/RequirePermission";
+import PendingInvitations from "@/modules/users/pages/PendingInvitations";
 
 export const router = createBrowserRouter([
   {
@@ -45,6 +46,8 @@ export const router = createBrowserRouter([
         Component: RequireAuth,
         children: [
           { path: "dashboard", Component: Dashboard },
+          // redirect de compatibilidad — cualquier enlace antiguo a /dashboard-player sigue funcionando
+          { path: "dashboard-player", element: <Navigate to="/dashboard" replace /> },
           { path: "dashboard-arbitro", Component: ArbitroDashboard },
           { path: "dashboard-arbitro/partido/:id", Component: MatchDetail },
           { path: "dashboard/team-setup", Component: TeamPrePaymentSetup },
@@ -69,6 +72,7 @@ export const router = createBrowserRouter([
           { path: "schedule", Component: Schedule },
           { path: "scores", Component: Scores },
           { path: "tournament", Component: Tournament },
+          { path: "pending-invitations", Component: PendingInvitations },
         ],
       },
     ],
