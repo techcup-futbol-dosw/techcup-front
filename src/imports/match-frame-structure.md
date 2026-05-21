@@ -72,10 +72,6 @@ Tarjeta amarilla
 
 Tarjeta roja
 
-Tiro de esquina
-
-Falta
-
 Cada fila debe usar Auto Layout horizontal para mantener la alineación de iconos, contadores y botones.
 
 3. Área de historial de eventos

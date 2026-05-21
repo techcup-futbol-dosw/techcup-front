@@ -138,7 +138,7 @@ export function Register() {
     if (normalizedRoles.includes("ADMIN"))     return "/dashboard-admin";
     if (normalizedRoles.includes("ORGANIZER")) return "/dashboard-organizer";
     if (normalizedRoles.includes("REFEREE"))   return "/dashboard-arbitro";
-    return "/dashboard";
+    return "/dashboard-player";
   };
 
 
