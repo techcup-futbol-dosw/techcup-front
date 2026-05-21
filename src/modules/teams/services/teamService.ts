@@ -31,11 +31,11 @@ export type RoleInTeam = "capitan" | "jugador";
 export type MyTeamDto = {
     id: number;
     name: string;
-    roleInTeam: RoleInTeam;
     teamStatus: TeamStatus;
-    joinedAt: string;
-    members: TeamMemberDto[];
-    schedule: TeamScheduleItemDto[];
+    roleInTeam?: RoleInTeam;
+    joinedAt?: string;
+    members?: TeamMemberDto[];
+    schedule?: TeamScheduleItemDto[];
     primaryColor?: string;
     secondaryColor?: string;
     logoUrl?: string | null;
@@ -44,19 +44,17 @@ export type MyTeamDto = {
 
 export type CreateTeamRequest = {
     name: string;
-    // backend may accept either a captain id or a dorsal; include both optionally
-    captainDorsal?: number;
     captainId?: number;
-    invitedEmails?: string[];
+    logoUrl?: string | null;
+    primaryColor?: string;
+    secondaryColor?: string;
 };
 
-export type InviteMemberRequest = {
-    // Align with InviteDTO.java: send playerId (and optional teamId)
+export type AddMemberRequest = {
+    memberRole: "PLAYER" | "CAPTAIN";
     playerId: number;
-    teamId?: number;
-    // legacy/email-based invite fields (not sent to backend by default)
-    email?: string;
-    jerseyNumber?: number;
+    dorsal: number;
+    active: boolean;
 };
 
 export type UploadPaymentRequest = {
@@ -65,20 +63,28 @@ export type UploadPaymentRequest = {
 
 export const teamService = {
     getMyTeam() {
-        return http.get<MyTeamDto>("/teams/my");
+        return http.get<MyTeamDto>("/api/teams/my");
+    },
+
+    getTeam(teamId: number) {
+        return http.get<MyTeamDto>(`/api/teams/${teamId}`, { auth: false });
+    },
+
+    getTeamMembers(teamId: number) {
+        return http.get<TeamMemberDto[]>(`/api/teams/${teamId}/members`, { auth: false });
     },
 
     create(payload: CreateTeamRequest) {
-        return http.post<MyTeamDto>("/teams", payload);
+        return http.post<MyTeamDto>("/api/teams", payload);
     },
 
-    inviteMember(teamId: number, payload: InviteMemberRequest) {
-        return http.post<void>(`/teams/${teamId}/members/invite`, payload);
+    addMember(teamId: number, payload: AddMemberRequest) {
+        return http.post<TeamMemberDto>(`/api/teams/${teamId}/members`, payload, { auth: false });
     },
 
     uploadPaymentProof(teamId: number, file: File) {
         const body = new FormData();
         body.append("file", file);
-        return http.post<void>(`/teams/${teamId}/payment`, body);
+        return http.post<void>(`/api/teams/${teamId}/payment`, body, { auth: false });
     },
 };
