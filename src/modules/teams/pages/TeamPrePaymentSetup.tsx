@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { AlertCircle, ArrowLeft, CheckCircle2, Palette, Shield, Users, Shirt, Upload, Search } from "lucide-react";
 import { readUICache, writeUICache } from "@/core/utils/uiCache";
+import { teamService } from "@/modules/teams/services/teamService";
 
 const P = {
   primary: "#B81C1C",
@@ -34,16 +35,21 @@ interface TeamScheduleItem {
 }
 
 interface TeamSetupState {
+  teamId?: number;
   teamName?: string;
   teamMembers?: TeamRosterMember[];
   teamSchedule?: TeamScheduleItem[];
   roleInTeam?: RoleType;
   teamStatus?: TeamStatus;
+  primaryColor?: string;
+  secondaryColor?: string;
+  logoUrl?: string | null;
 }
 
 const TEAM_CONTEXT_STORAGE_KEY = "techcup.teamContext";
 
 interface StoredTeamContext {
+  teamId?: number;
   roleInTeam?: RoleType;
   teamStatus?: TeamStatus;
   teamName?: string;
@@ -52,6 +58,7 @@ interface StoredTeamContext {
   primaryColor?: string;
   secondaryColor?: string;
   logoFileName?: string | null;
+  logoUrl?: string | null;
   confirmedLineups?: Record<number, string>;
 }
 
@@ -76,19 +83,21 @@ export function TeamPrePaymentSetup() {
 
   const storedTeamContext = loadStoredTeamContext();
 
-  const roleInTeam = state.roleInTeam ?? storedTeamContext?.roleInTeam ?? "capitan";
-  const teamStatus = state.teamStatus ?? storedTeamContext?.teamStatus ?? "pending-payment";
+  const [teamId, setTeamId] = useState<number | null>(state.teamId ?? storedTeamContext?.teamId ?? null);
+  const [roleInTeam] = useState<RoleType>(state.roleInTeam ?? storedTeamContext?.roleInTeam ?? "capitan");
+  const [teamStatus, setTeamStatus] = useState<TeamStatus>(state.teamStatus ?? storedTeamContext?.teamStatus ?? "pending-payment");
   const isLockedByPayment = teamStatus === "in-review" || teamStatus === "active";
   const canEdit = roleInTeam === "capitan" && !isLockedByPayment;
 
-  const [teamName] = useState(state.teamName ?? storedTeamContext?.teamName ?? "");
+  const [teamName, setTeamName] = useState(state.teamName ?? storedTeamContext?.teamName ?? "");
+  const [teamLogoUrl, setTeamLogoUrl] = useState<string | null>(state.logoUrl ?? storedTeamContext?.logoUrl ?? null);
   const [members, setMembers] = useState<TeamRosterMember[]>(state.teamMembers?.length ? state.teamMembers : storedTeamContext?.teamMembers?.length ? storedTeamContext.teamMembers : defaultMembers);
   const [savedPrimaryColor, setSavedPrimaryColor] = useState(storedTeamContext?.primaryColor ?? "#B81C1C");
   const [savedSecondaryColor, setSavedSecondaryColor] = useState(storedTeamContext?.secondaryColor ?? "#C4841D");
   const [draftPrimaryColor, setDraftPrimaryColor] = useState(storedTeamContext?.primaryColor ?? "#B81C1C");
   const [draftSecondaryColor, setDraftSecondaryColor] = useState(storedTeamContext?.secondaryColor ?? "#C4841D");
-  const [savedLogoLabel, setSavedLogoLabel] = useState<string | null>(storedTeamContext?.logoFileName ?? null);
-  const [draftLogoLabel, setDraftLogoLabel] = useState<string | null>(storedTeamContext?.logoFileName ?? null);
+  const [savedLogoLabel, setSavedLogoLabel] = useState<string | null>(storedTeamContext?.logoFileName ?? storedTeamContext?.logoUrl ?? null);
+  const [draftLogoLabel, setDraftLogoLabel] = useState<string | null>(storedTeamContext?.logoFileName ?? storedTeamContext?.logoUrl ?? null);
   const [isEditingLogo, setIsEditingLogo] = useState(canEdit);
   const [isEditingColors, setIsEditingColors] = useState(canEdit);
   const [designNotice, setDesignNotice] = useState<string | null>(null);
@@ -96,8 +105,10 @@ export function TeamPrePaymentSetup() {
   const [lineupNotice, setLineupNotice] = useState<string | null>(null);
   const [memberNotice, setMemberNotice] = useState<string | null>(null);
   const [memberError, setMemberError] = useState<string | null>(null);
-  const [newMemberEmail, setNewMemberEmail] = useState("");
+  const [newMemberPlayerId, setNewMemberPlayerId] = useState("");
   const [newMemberJersey, setNewMemberJersey] = useState("");
+  const [newMemberActive, setNewMemberActive] = useState(true);
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [jerseyDrafts, setJerseyDrafts] = useState<Record<number, number>>(() =>
     (state.teamMembers?.length ? state.teamMembers : defaultMembers).reduce<Record<number, number>>((acc, member) => {
       acc[member.id] = member.jerseyNumber;
@@ -119,12 +130,51 @@ export function TeamPrePaymentSetup() {
 
   const [confirmedLineups, setConfirmedLineups] = useState<Record<number, string>>(storedTeamContext?.confirmedLineups ?? {});
 
+  useEffect(() => {
+    if (!teamId) return;
+
+    let active = true;
+
+    Promise.all([teamService.getTeam(teamId), teamService.getTeamMembers(teamId)])
+      .then(([team, backendMembers]) => {
+        if (!active) return;
+
+        setTeamId(team.id);
+        setTeamName(team.name);
+        setTeamStatus(team.teamStatus);
+        setSavedPrimaryColor(team.primaryColor ?? "#B81C1C");
+        setSavedSecondaryColor(team.secondaryColor ?? "#C4841D");
+        setDraftPrimaryColor(team.primaryColor ?? "#B81C1C");
+        setDraftSecondaryColor(team.secondaryColor ?? "#C4841D");
+        setTeamLogoUrl(team.logoUrl ?? null);
+        setSavedLogoLabel(team.logoUrl ?? null);
+        setDraftLogoLabel(team.logoUrl ?? null);
+
+        setMembers((prev) => {
+          if (prev.length > 0) return prev;
+          return backendMembers.map((member) => ({
+            id: member.playerId ?? member.id,
+            name: member.memberRole === "capitan" ? "Capitán" : `Jugador ${member.playerId}`,
+            email: "",
+            role: member.memberRole === "capitan" ? "Capitán" : "Jugador",
+            jerseyNumber: member.dorsal ?? 0,
+          }));
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [teamId]);
+
   const persistTeamContext = (nextContext: StoredTeamContext) => {
     writeUICache(TEAM_CONTEXT_STORAGE_KEY, nextContext);
   };
 
   useEffect(() => {
     persistTeamContext({
+      teamId: teamId ?? undefined,
       roleInTeam,
       teamStatus,
       teamName,
@@ -133,9 +183,10 @@ export function TeamPrePaymentSetup() {
       primaryColor: savedPrimaryColor,
       secondaryColor: savedSecondaryColor,
       logoFileName: savedLogoLabel ?? draftLogoLabel ?? storedTeamContext?.logoFileName ?? null,
+      logoUrl: teamLogoUrl,
       confirmedLineups,
     });
-  }, [roleInTeam, teamStatus, teamName, members, schedule, savedPrimaryColor, savedSecondaryColor, savedLogoLabel, draftLogoLabel, confirmedLineups]);
+  }, [teamId, roleInTeam, teamStatus, teamName, teamLogoUrl, members, schedule, savedPrimaryColor, savedSecondaryColor, savedLogoLabel, draftLogoLabel, confirmedLineups]);
 
   const membersValidation = useMemo(() => {
     const count = members.length;
@@ -207,53 +258,73 @@ export function TeamPrePaymentSetup() {
     setMemberNotice("Jugador eliminado de la plantilla.");
   };
 
-  const addMember = () => {
+  const addMember = async () => {
     if (!canEdit) return;
 
-    const email = newMemberEmail.trim().toLowerCase();
+    const playerId = Number(newMemberPlayerId.trim());
     const jersey = Number(newMemberJersey);
 
     if (members.length >= 12) {
       setMemberError("No puedes superar 12 integrantes en la plantilla.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setMemberError("Ingresa un correo válido.");
+    if (!Number.isInteger(playerId) || playerId < 1) {
+      setMemberError("El ID del jugador debe ser un número entero mayor a 0.");
       return;
     }
-    if (!/\.edu(\.[a-z]{2})?$/i.test(email)) {
-      setMemberError("El correo del jugador debe ser institucional (.edu).");
+    if (members.some((member) => member.id === playerId)) {
+      setMemberError("Ese jugador ya está en la plantilla.");
       return;
     }
-    if (members.some((member) => member.email.toLowerCase() === email)) {
-      setMemberError("Ese correo ya está registrado en la plantilla.");
-      return;
-    }
-    if (!Number.isInteger(jersey) || jersey < 0 || jersey > 99) {
-      setMemberError("El dorsal debe estar entre 0 y 99.");
+    if (!Number.isInteger(jersey) || jersey < 1 || jersey > 99) {
+      setMemberError("El dorsal debe estar entre 1 y 99.");
       return;
     }
     if (members.some((member) => member.jerseyNumber === jersey)) {
-      setMemberError("Ese dorsal ya está asignado.");
+      setMemberError("Ese dorsal ya está asignado a otro miembro.");
+      return;
+    }
+    if (!teamId) {
+      setMemberError("No se encontró el equipo.");
       return;
     }
 
-    const nextId = members.reduce((max, member) => Math.max(max, member.id), 0) + 1;
-    const generatedName = email.split("@")[0] || `jugador-${nextId}`;
-    const newMember: TeamRosterMember = {
-      id: nextId,
-      name: generatedName,
-      email,
-      role: "Jugador",
-      jerseyNumber: jersey,
-    };
-
-    setMembers((prev) => [...prev, newMember]);
-    setJerseyDrafts((prev) => ({ ...prev, [nextId]: jersey }));
-    setNewMemberEmail("");
-    setNewMemberJersey("");
+    setIsAddingMember(true);
     setMemberError(null);
-    setMemberNotice("Jugador agregado correctamente.");
+
+    try {
+      const result = await teamService.addMember(teamId, {
+        memberRole: "PLAYER",
+        playerId,
+        dorsal: jersey,
+        active: newMemberActive,
+      });
+
+      const parsedMemberId = Number(result.playerId ?? playerId);
+      const memberId = Number.isFinite(parsedMemberId) && parsedMemberId > 0 ? parsedMemberId : Date.now();
+
+      const newMember: TeamRosterMember = {
+        id: memberId,
+        name: `Jugador ${playerId}`,
+        email: "",
+        role: "Jugador",
+        jerseyNumber: result.dorsal ?? jersey,
+      };
+
+      setMembers((prev) => {
+        if (prev.some((member) => member.id === newMember.id)) return prev;
+        return [...prev, newMember];
+      });
+      setJerseyDrafts((prev) => ({ ...prev, [newMember.id]: jersey }));
+      setNewMemberPlayerId("");
+      setNewMemberJersey("");
+      setNewMemberActive(true);
+      setMemberNotice("Jugador añadido correctamente.");
+    } catch {
+      setMemberError("No se pudo añadir el jugador. Verifica el ID, dorsal y que no sea miembro activo ya.");
+    } finally {
+      setIsAddingMember(false);
+    }
   };
 
   const handleLogoUpload = (file: File | null) => {
@@ -532,56 +603,81 @@ export function TeamPrePaymentSetup() {
           </p>
 
           <div className="rounded-2xl border p-3 mb-4" style={{ borderColor: "rgba(0,0,0,0.08)", backgroundColor: "#FAFAFA" }}>
-            <p className="text-xs mb-2" style={{ color: P.textPrimary, fontWeight: 700 }}>Agregar jugador</p>
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_100px_auto_auto] gap-2">
-              <input
-                disabled={!canEdit}
-                value={newMemberEmail}
-                onChange={(event) => setNewMemberEmail(event.target.value)}
-                placeholder="correo@mail.edu"
-                className="rounded-lg border px-2 py-1.5 text-sm"
-                style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
-              />
-              <input
-                disabled={!canEdit}
-                type="number"
-                min={0}
-                max={99}
-                value={newMemberJersey}
-                onChange={(event) => setNewMemberJersey(event.target.value)}
-                placeholder="Dorsal"
-                className="rounded-lg border px-2 py-1.5 text-sm"
-                style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
-              />
-              <button
-                type="button"
-                disabled={!canEdit || members.length >= 12}
-                onClick={addMember}
-                className="rounded-lg border px-4 py-1.5 text-xs whitespace-nowrap"
-                style={{
-                  borderColor: `${P.info}45`,
-                  color: P.info,
-                  fontWeight: 800,
-                  backgroundColor: "white",
-                  opacity: !canEdit || members.length >= 12 ? 0.45 : 1,
-                }}
-              >
-                Agregar
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/player-search")}
-                className="rounded-lg border px-4 py-1.5 text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
-                style={{
-                  borderColor: `${P.primary}45`,
-                  color: P.primary,
-                  fontWeight: 800,
-                  backgroundColor: "white",
-                }}
-              >
-                <Search style={{ width: 12, height: 12 }} />
-                Buscar jugador
-              </button>
+            <p className="text-xs mb-1" style={{ color: P.textPrimary, fontWeight: 700 }}>Añadir miembro</p>
+            <p className="text-xs mb-3" style={{ color: P.default, fontWeight: 500 }}>
+              Ingresa el ID único del jugador y asígnale un dorsal. El rol se establece como <span style={{ fontWeight: 700 }}>PLAYER</span> automáticamente.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: P.default, fontWeight: 700 }}>ID del jugador *</label>
+                <input
+                  disabled={!canEdit}
+                  value={newMemberPlayerId}
+                  onChange={(event) => setNewMemberPlayerId(event.target.value)}
+                  type="number"
+                  min={1}
+                  placeholder="Ej. 42"
+                  className="w-full rounded-lg border px-2 py-1.5 text-sm"
+                  style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: P.default, fontWeight: 700 }}>Dorsal * (1–99)</label>
+                <input
+                  disabled={!canEdit}
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={newMemberJersey}
+                  onChange={(event) => setNewMemberJersey(event.target.value)}
+                  placeholder="Ej. 10"
+                  className="w-full rounded-lg border px-2 py-1.5 text-sm"
+                  style={{ borderColor: "rgba(0,0,0,0.15)", color: P.textPrimary, fontWeight: 600 }}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 select-none" style={{ cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.45 }}>
+                <input
+                  disabled={!canEdit}
+                  type="checkbox"
+                  checked={newMemberActive}
+                  onChange={(event) => setNewMemberActive(event.target.checked)}
+                  className="w-4 h-4 rounded"
+                />
+                <span className="text-xs" style={{ color: P.textPrimary, fontWeight: 700 }}>Activo</span>
+              </label>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  disabled={!canEdit || members.length >= 12 || isAddingMember}
+                  onClick={addMember}
+                  className="rounded-lg border px-4 py-1.5 text-xs whitespace-nowrap"
+                  style={{
+                    borderColor: `${P.info}45`,
+                    color: P.info,
+                    fontWeight: 800,
+                    backgroundColor: "white",
+                    opacity: !canEdit || members.length >= 12 || isAddingMember ? 0.45 : 1,
+                  }}
+                >
+                  {isAddingMember ? "Añadiendo..." : "Añadir miembro"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/player-search", { state: { teamId, teamName } })}
+                  className="rounded-lg border px-4 py-1.5 text-xs flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  style={{
+                    borderColor: `${P.primary}45`,
+                    color: P.primary,
+                    fontWeight: 800,
+                    backgroundColor: "white",
+                  }}
+                >
+                  <Search style={{ width: 12, height: 12 }} />
+                  Buscar jugador
+                </button>
+              </div>
             </div>
             {memberError && <p className="text-xs mt-2" style={{ color: P.primary, fontWeight: 700 }}>{memberError}</p>}
             {memberNotice && <p className="text-xs mt-2" style={{ color: P.success, fontWeight: 700 }}>{memberNotice}</p>}
