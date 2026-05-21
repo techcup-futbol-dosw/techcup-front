@@ -1,5 +1,6 @@
 import { http } from "@/core/api/http";
 import { supabase } from "@/core/utils/supabase";
+import { sanitizeFileName } from "@/core/utils/fileutils";
 
 export type TournamentStatus =
     | "DRAFT"
@@ -191,30 +192,26 @@ export const tournamentService = {
     },
 
     async uploadRegulation(file: File): Promise<{ url: string }> {
-
-        const fileExt = file.name.split(".").pop();
-
-        const fileName =
-        `${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
-
+        const sanitizedFileName = sanitizeFileName(file.name);
+        const fileName = `${Date.now()}-${crypto.randomUUID()}-${sanitizedFileName}`;
         const filePath = `regulations/${fileName}`;
 
         const { error } = await supabase.storage
-        .from("tournament-rules")
-        .upload(filePath, file, {
+            .from("tournament-rules")
+            .upload(filePath, file, {
             upsert: false,
-        });
+            });
 
         if (error) {
             throw new Error(error.message);
         }
 
         const { data } = supabase.storage
-        .from("tournament-rules")
-        .getPublicUrl(filePath);
+            .from("tournament-rules")
+            .getPublicUrl(filePath);
 
         return {
-        url: data.publicUrl,
+            url: data.publicUrl,
         };
     },
     
