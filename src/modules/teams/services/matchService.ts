@@ -33,7 +33,7 @@ export type MatchDetailDto = {
     status: MatchStatus;
 };
 
-export type MatchEventType = "gol" | "amarilla" | "roja" | "esquina" | "falta";
+export type MatchEventType = "gol" | "amarilla" | "roja";
 
 export type AddMatchEventRequest = {
     type: MatchEventType;
@@ -46,22 +46,22 @@ export type AddMatchEventRequest = {
 
 export const matchService = {
     getAssigned() {
-        return http.get<AssignedMatchDto[]>("/matches/referee/assigned");
+        return http.get<AssignedMatchDto[]>("/api/matches/referee/assigned");
     },
 
     getById(id: number) {
-        return http.get<MatchDetailDto>(`/matches/${id}`);
+        return http.get<MatchDetailDto>(`/api/matches/${id}`);
     },
 
     start(id: number) {
-        return http.patch<void>(`/matches/${id}/start`);
+        return http.patch<void>(`/api/matches/${id}/start`);
     },
 
     finish(id: number) {
-        return http.patch<void>(`/matches/${id}/finish`);
+        return http.patch<void>(`/api/matches/${id}/finish`);
     },
 
     addEvent(id: number, payload: AddMatchEventRequest) {
-        return http.post<void>(`/matches/${id}/events`, payload);
+        return http.post<void>(`/api/matches/${id}/events`, payload);
     },
 };
