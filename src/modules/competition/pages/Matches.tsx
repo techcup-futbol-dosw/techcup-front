@@ -4,9 +4,10 @@
  */
 import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Clock, Swords, MapPin, ChevronDown } from "lucide-react";
 import { readUICache } from "@/core/utils/uiCache";
+import { loadMatchesIntoCache } from "@/core/services/competitionsService";
 
 const P = {
   primary: "#B81C1C",
@@ -34,8 +35,6 @@ interface Match {
   score2: number | null;
   stats: MatchStats | null;
 }
-
-const matches = readUICache<Match[]>("techcup.ui.matches", []);
 
 function StatRow({ label, val1, val2, statColor }: { label: string; val1: number; val2: number; statColor: string }) {
   const total = val1 + val2 || 1;
@@ -101,16 +100,12 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
       className="bg-white rounded-[20px] overflow-hidden"
       style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
     >
-      {/* Status top stripe */}
       <div className="h-[3px] w-full" style={{ backgroundColor: ac }} />
-
-      {/* Main row */}
       <div
         className={`px-5 py-5 sm:px-6 ${hasStats ? "cursor-pointer select-none" : ""}`}
         onClick={() => hasStats && setOpen((v) => !v)}
       >
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          {/* Time + venue */}
           <div className="sm:w-28 flex-shrink-0">
             <p style={{ fontSize: "1.35rem", fontWeight: 800, color: P.primary, letterSpacing: "-0.02em" }}>
               {match.time}
@@ -120,13 +115,10 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
               <span style={{ fontSize: "0.75rem", fontWeight: 500, color: P.default }}>{match.venue}</span>
             </div>
           </div>
-
-          {/* Teams + score */}
           <div className="flex-1 flex items-center justify-between gap-3">
             <span className="text-base flex-1 text-right" style={{ fontWeight: 700, color: P.textPrimary }}>
               {match.team1}
             </span>
-
             {match.score1 !== null ? (
               <div
                 className="flex items-center gap-2.5 px-4 py-2 rounded-2xl flex-shrink-0"
@@ -137,20 +129,14 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
                 <span style={{ fontSize: "1.25rem", fontWeight: 800, color: P.info }}>{match.score2}</span>
               </div>
             ) : (
-              <div
-                className="px-5 py-2 rounded-2xl flex-shrink-0"
-                style={{ backgroundColor: P.bg }}
-              >
+              <div className="px-5 py-2 rounded-2xl flex-shrink-0" style={{ backgroundColor: P.bg }}>
                 <span style={{ fontSize: "0.85rem", fontWeight: 700, color: P.default }}>VS</span>
               </div>
             )}
-
             <span className="text-base flex-1" style={{ fontWeight: 700, color: P.textPrimary }}>
               {match.team2}
             </span>
           </div>
-
-          {/* Status + chevron */}
           <div className="sm:w-32 flex-shrink-0 flex sm:justify-end items-center gap-2">
             <span
               className="text-xs px-3 py-1 rounded-full"
@@ -170,7 +156,6 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
             )}
           </div>
         </div>
-
         {hasStats && !open && (
           <motion.p
             initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -181,8 +166,6 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
           </motion.p>
         )}
       </div>
-
-      {/* Stats Panel */}
       <AnimatePresence initial={false}>
         {open && match.stats && (
           <motion.div
@@ -194,7 +177,6 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
             className="overflow-hidden"
           >
             <div style={{ borderTop: "1px solid rgba(0,0,0,0.05)" }}>
-              {/* Panel header */}
               <div className="px-5 sm:px-6 py-4 flex items-center justify-between" style={{ backgroundColor: P.bg }}>
                 <span style={{ fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.14em", color: P.default, textTransform: "uppercase" }}>
                   Estadísticas del Partido
@@ -208,8 +190,6 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
                   </span>
                 </div>
               </div>
-
-              {/* Stat grid */}
               <div className="px-5 sm:px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-4 bg-white">
                 {[
                   { icon: <YellowCardIcon />, label: "Tarjetas Amarillas", color: P.secondary, vals: match.stats.yellowCards },
@@ -239,7 +219,18 @@ function MatchCard({ match, index }: { match: Match; index: number }) {
 }
 
 export function Matches() {
+  const [matches, setMatches] = useState<Match[]>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    loadMatchesIntoCache("1")
+      .then(() => {
+        const data = readUICache<Match[]>("techcup.ui.matches", []);
+        setMatches(data);
+      })
+      .catch(() => {});
+  }, []);
+
   const today = new Date().toLocaleDateString("es-ES", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
@@ -256,8 +247,6 @@ export function Matches() {
 
   return (
     <div className="min-h-screen pb-24 lg:pb-0" style={{ backgroundColor: P.bg }}>
-
-      {/* ── Header ── */}
       <motion.header
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -291,8 +280,6 @@ export function Matches() {
       </motion.header>
 
       <main className="max-w-3xl mx-auto px-6 sm:px-10 pt-10 pb-16">
-
-        {/* ── Title ── */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -308,7 +295,6 @@ export function Matches() {
           </div>
         </motion.div>
 
-        {/* ── Summary pills ── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -329,7 +315,6 @@ export function Matches() {
           ))}
         </motion.div>
 
-        {/* ── Section label ── */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -338,7 +323,6 @@ export function Matches() {
           <SectionLabel text="Todos los Partidos" color={P.primary} />
         </motion.div>
 
-        {/* ── Match cards ── */}
         <div className="space-y-4">
           {sorted.length === 0 ? (
             <div className="bg-white rounded-[20px] p-8 text-center" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
@@ -352,11 +336,7 @@ export function Matches() {
             sorted.map((match, index) => <MatchCard key={match.id} match={match} index={index} />)
           )}
         </div>
-
       </main>
     </div>
   );
 }
-
-
-
