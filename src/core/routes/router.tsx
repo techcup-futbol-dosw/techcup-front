@@ -46,7 +46,6 @@ export const router = createBrowserRouter([
         Component: RequireAuth,
         children: [
           { path: "dashboard", Component: Dashboard },
-          { path: "dashboard-player", Component: Dashboard },
           { path: "dashboard-arbitro", Component: ArbitroDashboard },
           { path: "dashboard-arbitro/partido/:id", Component: MatchDetail },
           { path: "dashboard/team-setup", Component: TeamPrePaymentSetup },
