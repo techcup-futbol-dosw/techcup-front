@@ -81,7 +81,7 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
 const getDashboardPath = (context: string): string => {
   if (context === "organizer") return "/dashboard-organizer";
   if (context === "arbitro") return "/dashboard-arbitro";
-  return "/dashboard";
+  return "/dashboard-player";
 };
 
 // Helper: Determinar color por contexto
