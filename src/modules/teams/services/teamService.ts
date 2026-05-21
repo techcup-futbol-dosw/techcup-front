@@ -67,24 +67,24 @@ export const teamService = {
     },
 
     getTeam(teamId: number) {
-        return http.get<MyTeamDto>(`/api/teams/${teamId}`);
+        return http.get<MyTeamDto>(`/api/teams/${teamId}`, { auth: false });
     },
 
     getTeamMembers(teamId: number) {
-        return http.get<TeamMemberDto[]>(`/api/teams/${teamId}/members`);
+        return http.get<TeamMemberDto[]>(`/api/teams/${teamId}/members`, { auth: false });
     },
 
     create(payload: CreateTeamRequest) {
-        return http.post<MyTeamDto>("/api/teams", payload);
+        return http.post<MyTeamDto>("/api/teams", payload, { auth: false });
     },
 
     addMember(teamId: number, payload: AddMemberRequest) {
-        return http.post<TeamMemberDto>(`/api/teams/${teamId}/members`, payload);
+        return http.post<TeamMemberDto>(`/api/teams/${teamId}/members`, payload, { auth: false });
     },
 
     uploadPaymentProof(teamId: number, file: File) {
         const body = new FormData();
         body.append("file", file);
-        return http.post<void>(`/api/teams/${teamId}/payment`, body);
+        return http.post<void>(`/api/teams/${teamId}/payment`, body, { auth: false });
     },
 };
