@@ -210,44 +210,31 @@ export function OrganizerDashboard() {
   const navigate = useNavigate();
   const [showLogout, setShowLogout] = useState(false);
   const [torneoVigente, setTorneoVigente] = useState<TorneoVigente | null>(null);
+
   useEffect(() => {
-  const userContext = sessionStorage.getItem("userContext");
-  if (!userContext) return;
-  const user = JSON.parse(userContext);
-  const organizerId = user.id;
-  tournamentService
-      .getByOrganizer(organizerId)
+    tournamentService.list()
       .then((list) => {
-        const active =
-          list.find(
-            (t) =>
-              t.status === "IN_PROGRESS" ||
-              t.status === "ACTIVE"
-          ) ??
-          list[0] ??
-          null;
+        const active = list.find((t) => t.status === "in_progress" || t.status === "active") ?? list[0] ?? null;
         if (!active) return;
-        const estadoMap = {
-          DRAFT: "Borrador",
-          ACTIVE: "Activo",
-          IN_PROGRESS: "En Progreso",
-          FINISHED: "Finalizado",
-        } as const;
+        const estadoMap: Record<string, string> = {
+          draft:       "Borrador",
+          active:      "Activo",
+          in_progress: "En Progreso",
+          finished:    "Finalizado",
+        };
         setTorneoVigente({
-          nombre: active.name,
-          estado: estadoMap[active.status as keyof typeof estadoMap] ?? "Desconocido",
-          fechaInicio: active.startDate,
-          fechaCierreInscripciones:
-            active.endInscriptions,
-          costo: active.cost,
-          equiposInscritos:
-            active.teams,
-          partidosJugados: 0,
-          pagosEnRevision: 0,
-          partidosHoy: 0,
+          nombre:                   active.name,
+          estado:                   estadoMap[active.status] ?? "Activo",
+          fechaInicio:              active.startDate,
+          fechaCierreInscripciones: active.registrationCloseDate,
+          costo:                    active.costPerTeam,
+          equiposInscritos:         active.approvedTeams,
+          partidosJugados:          0,
+          pagosEnRevision:          0,
+          partidosHoy:              0,
         });
       })
-      .catch(console.error);
+      .catch(() => {});
   }, []);
 
   const handleLogout = () => {
