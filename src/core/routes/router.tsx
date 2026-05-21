@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { LandingPage } from "@/modules/auth/pages/LandingPage";
 import { Dashboard } from "@/modules/competition/pages/Dashboard";
 import { ArbitroDashboard } from "@/modules/teams/pages/ArbitroDashboard";
