@@ -14,13 +14,13 @@ Antes de ejecutar este proyecto, asegúrate de tener:
 ## Instalación
 
 ```bash
-npm install
+pnp install
 ```
 
 ## Ejecutar En Desarrollo
 
 ```bash
-npm run dev
+pnp run dev
 ```
 
 URL local por defecto:
@@ -32,19 +32,19 @@ http://localhost:5173
 Si necesitas acceso desde otros dispositivos en la misma red:
 
 ```bash
-npm run dev -- --host
+pnp run dev -- --host
 ```
 
 ## Compilar Para Producción
 
 ```bash
-npm run build
+pnp run build
 ```
 
 ## Previsualizar Build De Producción
 
 ```bash
-npm run preview
+pnp run preview
 ```
 
 ## Organización De Carpetas Del Proyecto (Por Equipos)
