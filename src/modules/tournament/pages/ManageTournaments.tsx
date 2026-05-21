@@ -40,24 +40,24 @@ const P = {
 
 // ── Types — se reusan los del servicio ────────────
 type TournamentStatus = TournamentDto["status"];
-type Court = TournamentDto["courts"][number];
+type Court = TournamentDto["fields"][number];
 type Tournament = TournamentDto;
 
 // ── Helpers ───────────────────────────────────────
 const today = () => new Date().toISOString().split("T")[0];
 
 const canActivate = (t: Tournament) =>
-  t.status === "draft" && t.startDate > today();
+  t.status === "DRAFT" && t.startDate > today();
 
 const canStart = (t: Tournament) =>
-  t.status === "active" && t.startDate === today();
+  t.status === "ACTIVE" && t.startDate === today();
 
 const canFinish = (t: Tournament) =>
-  t.status === "in_progress" && t.endDate >= today();
+  t.status === "IN_PROGRESS" && t.endDate >= today();
 
-const canDelete = (t: Tournament) => t.status === "draft";
+const canDelete = (t: Tournament) => t.status === "DRAFT";
 
-const canEdit = (t: Tournament) => t.status === "draft";
+const canEdit = (t: Tournament) => t.status === "DRAFT";
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -78,13 +78,13 @@ const STATUS_CONFIG: Record<
   TournamentStatus,
   { label: string; color: string; bg: string }
 > = {
-  draft:       { label: "Borrador",    color: P.default,   bg: `${P.default}18` },
-  active:      { label: "Activo",      color: P.info,      bg: `${P.info}18` },
-  in_progress: { label: "En Progreso", color: P.success,   bg: `${P.success}18` },
-  finished:    { label: "Finalizado",  color: P.primary,   bg: `${P.primary}18` },
+  DRAFT:       { label: "Borrador",    color: P.default,   bg: `${P.default}18` },
+  ACTIVE:      { label: "Activo",      color: P.info,      bg: `${P.info}18` },
+  IN_PROGRESS: { label: "En Progreso", color: P.success,   bg: `${P.success}18` },
+  FINISHED:    { label: "Finalizado",  color: P.primary,   bg: `${P.primary}18` },
 };
 
-const STATUS_ORDER: TournamentStatus[] = ["draft", "active", "in_progress", "finished"];
+const STATUS_ORDER: TournamentStatus[] = ["DRAFT", "ACTIVE", "IN_PROGRESS", "FINISHED"];
 
 // ── Component ─────────────────────────────────────
 export function ManageTournaments() {
@@ -99,12 +99,30 @@ export function ManageTournaments() {
   const [pendingRegFile, setPendingRegFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchTournaments = () => {
-    setLoading(true);
-    tournamentService.list()
-      .then(setTournaments)
-      .catch(() => setTournaments([]))
-      .finally(() => setLoading(false));
+  const fetchTournaments = async () => {
+    try {
+      setLoading(true);
+
+      const userContext = sessionStorage.getItem("userContext");
+
+      if (!userContext) {
+        setTournaments([]);
+        return;
+      }
+
+      const user = JSON.parse(userContext);
+
+      const data =
+        await tournamentService.getByOrganizer(user.id);
+
+      setTournaments(data);
+
+    } catch (error) {
+      console.error(error);
+      setTournaments([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchTournaments(); }, []);
@@ -153,8 +171,8 @@ export function ManageTournaments() {
   // ── Edit modal ──
   const handleOpenEdit = (tournament: Tournament) => {
     if (!canEdit(tournament)) return;
-    setEditForm({ ...tournament, courts: tournament.courts.map((c) => ({ ...c })) });
-    setOriginalEditForm({ ...tournament, courts: tournament.courts.map((c) => ({ ...c })) });
+    setEditForm({ ...tournament, fields: tournament.fields.map((c) => ({ ...c })) });
+    setOriginalEditForm({ ...tournament, fields: tournament.fields.map((c) => ({ ...c })) });
     setPendingRegFile(null);
     setEditErrors({});
     setShowEditModal(true);
@@ -166,51 +184,101 @@ export function ManageTournaments() {
     if (!editForm.name.trim()) errs.name = "El nombre es obligatorio";
     if (!editForm.startDate) errs.startDate = "Fecha de inicio obligatoria";
     if (!editForm.endDate) errs.endDate = "Fecha de fin obligatoria";
-    if (!editForm.registrationCloseDate)
+    if (!editForm.endInscriptions)
       errs.registrationCloseDate = "Fecha de cierre de inscripciones obligatoria";
     if (editForm.startDate && editForm.endDate && editForm.endDate < editForm.startDate)
       errs.endDate = "La fecha de fin no puede ser anterior al inicio";
     if (
-      editForm.registrationCloseDate &&
+      editForm.endInscriptions &&
       editForm.startDate &&
-      editForm.registrationCloseDate >= editForm.startDate
+      editForm.endInscriptions >= editForm.startDate
     )
       errs.registrationCloseDate =
         "El cierre de inscripciones debe ser anterior a la fecha de inicio";
-    if ((editForm.maxTeams ?? 0) < 2) errs.maxTeams = "Mínimo 2 equipos";
-    if ((editForm.costPerTeam ?? 0) < 0) errs.costPerTeam = "El costo no puede ser negativo";
-    if ((editForm.courts ?? []).some((c) => !c.name.trim()))
+    if ((editForm.teams ?? 0) < 2) errs.maxTeams = "Mínimo 2 equipos";
+    if ((editForm.cost ?? 0) < 0) errs.costPerTeam = "El costo no puede ser negativo";
+    if ((editForm.fields ?? []).some((c) => !c.name.trim()))
       errs.courts = "Todas las canchas deben tener nombre";
     setEditErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
   const handleSave = async () => {
-    if (!editForm || !validateEdit()) return;
-    if (!window.confirm("¿Guardar los cambios del torneo?")) return;
-    try {
-      let regulationFileName = editForm.regulationFileName;
-      if (pendingRegFile) {
-        const { fileName } = await tournamentService.uploadRegulation(pendingRegFile);
-        regulationFileName = fileName;
-      }
-      const updated = await tournamentService.update(editForm.id, {
-        name: editForm.name,
-        startDate: editForm.startDate,
-        endDate: editForm.endDate,
-        registrationCloseDate: editForm.registrationCloseDate,
-        maxTeams: editForm.maxTeams,
-        costPerTeam: editForm.costPerTeam,
-        courtIds: editForm.courts.map((c) => c.id),
-        regulationPdfUrl: regulationFileName ?? null,
-      });
-      setTournaments((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+  if (!editForm || !validateEdit()) return;
+
+  if (!window.confirm("¿Guardar los cambios del torneo?")) return;
+
+  try {
+
+    // URL actual del reglamento
+    let rulesUrl = editForm.rulesUrl;
+
+    // Si el usuario subió un nuevo PDF
+    if (pendingRegFile) {
+
+      // Subir a Supabase
+      const { url } =
+        await tournamentService.uploadRegulation(
+          pendingRegFile
+        );
+
+      // Guardar nueva URL
+      rulesUrl = url;
+    }
+
+    // Actualizar torneo en backend
+    const updated = await tournamentService.update(
+        editForm.id,
+        {
+          name: editForm.name,
+
+          startDate: editForm.startDate,
+
+          endDate: editForm.endDate,
+
+          registrationCloseDate:
+            editForm.endInscriptions,
+
+          teams: editForm.teams,
+
+          cost: editForm.cost,
+
+          courtIds: editForm.fields.map(
+            (c) => c.id
+          ),
+
+          regulationPdfUrl: rulesUrl ?? null,
+        }
+      );
+
+      // Actualizar estado React
+      setTournaments((prev) =>
+        prev.map((t) =>
+          t.id === updated.id ? updated : t
+        )
+      );
+
+      // Cerrar modal
       setShowEditModal(false);
+
       setEditForm(null);
+
       setOriginalEditForm(null);
+
       setPendingRegFile(null);
-      window.alert("Cambios guardados correctamente.");
-    } catch { window.alert("Error al guardar los cambios."); }
+
+      window.alert(
+        "Cambios guardados correctamente."
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      window.alert(
+        "Error al guardar los cambios."
+      );
+    }
   };
 
   const handleDiscard = () => {
@@ -228,10 +296,10 @@ export function ManageTournaments() {
   // ── Courts helpers ──
   const addCourt = () => {
     if (!editForm) return;
-    const newId = Math.max(0, ...editForm.courts.map((c) => c.id)) + 1;
+    const newId = Math.max(0, ...editForm.fields.map((c) => c.id)) + 1;
     setEditForm({
       ...editForm,
-      courts: [...editForm.courts, { id: newId, name: "", description: "" }],
+      fields: [...editForm.fields, { id: newId, name: "", description: "" }],
     });
   };
 
@@ -239,7 +307,7 @@ export function ManageTournaments() {
     if (!editForm) return;
     setEditForm({
       ...editForm,
-      courts: editForm.courts.filter((c) => c.id !== courtId),
+      fields: editForm.fields.filter((c) => c.id !== courtId),
     });
   };
 
@@ -251,7 +319,7 @@ export function ManageTournaments() {
     if (!editForm) return;
     setEditForm({
       ...editForm,
-      courts: editForm.courts.map((c) =>
+      fields: editForm.fields.map((c) =>
         c.id === courtId ? { ...c, [field]: value } : c
       ),
     });
@@ -489,7 +557,7 @@ export function ManageTournaments() {
                         style={{ color: P.default, fontWeight: 500 }}
                       >
                         <Clock style={{ width: 13, height: 13 }} />
-                        Cierre insc.: {formatDate(tournament.registrationCloseDate)}
+                        Cierre insc.: {formatDate(tournament.endDate)}
                       </p>
                     </div>
                   </div>
@@ -507,19 +575,19 @@ export function ManageTournaments() {
                         className="text-xs"
                         style={{ color: P.default, fontWeight: 600 }}
                       >
-                        Equipos aprobados
+                        Equipos   
                       </span>
                     </div>
                     <p
                       className="text-xl"
                       style={{ fontWeight: 700, color: P.textPrimary }}
                     >
-                      {tournament.approvedTeams}
+                      {tournament.teams}
                       <span
                         className="text-sm ml-1"
                         style={{ color: P.default, fontWeight: 500 }}
                       >
-                        / {tournament.maxTeams}
+                        / {tournament.teams}
                       </span>
                     </p>
                   </div>
@@ -535,29 +603,14 @@ export function ManageTournaments() {
                       </span>
                     </div>
                     <p className="text-sm" style={{ fontWeight: 700, color: P.textPrimary }}>
-                      {formatCurrency(tournament.costPerTeam)}
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-xl p-3">
-                    <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="w-4 h-4" style={{ color: P.secondary }} />
-                      <span
-                        className="text-xs"
-                        style={{ color: P.default, fontWeight: 600 }}
-                      >
-                        Ingresos
-                      </span>
-                    </div>
-                    <p className="text-sm" style={{ fontWeight: 700, color: P.textPrimary }}>
-                      {formatCurrency(tournament.totalRevenue)}
+                      {formatCurrency(tournament.cost)}
                     </p>
                   </div>
                 </div>
 
                 {/* Courts + regulation */}
                 <div className="flex flex-wrap gap-3 mb-5">
-                  {tournament.courts.length > 0 && (
+                  {tournament.fields.length > 0 && (
                     <div className="flex-1 min-w-[180px]">
                       <p
                         style={{
@@ -572,7 +625,7 @@ export function ManageTournaments() {
                         Canchas
                       </p>
                       <div className="flex flex-wrap gap-1.5">
-                        {tournament.courts.map((c) => (
+                        {tournament.fields.map((c) => (
                           <span
                             key={c.id}
                             className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
@@ -591,7 +644,7 @@ export function ManageTournaments() {
                     </div>
                   )}
 
-                  {tournament.regulationFileName && (
+                  {tournament.rulesUrl  && (
                     <div>
                       <p
                         style={{
@@ -605,7 +658,7 @@ export function ManageTournaments() {
                       >
                         Reglamento
                       </p>
-                      <button
+                      <a
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
                         style={{
                           background: `${P.secondary}12`,
@@ -615,7 +668,7 @@ export function ManageTournaments() {
                       >
                         <FileText style={{ width: 13, height: 13 }} />
                         Ver PDF
-                      </button>
+                      </a>
                     </div>
                   )}
                 </div>
@@ -899,11 +952,11 @@ export function ManageTournaments() {
                       />
                       <input
                         type="date"
-                        value={editForm.registrationCloseDate}
+                        value={editForm.endDate}
                         onChange={(e) =>
                           setEditForm({
                             ...editForm,
-                            registrationCloseDate: e.target.value,
+                            endDate: e.target.value,
                           })
                         }
                         className="w-full pl-11 pr-4 py-3 rounded-xl border border-black/8 text-sm"
@@ -933,11 +986,11 @@ export function ManageTournaments() {
                         type="number"
                         min="2"
                         max="64"
-                        value={editForm.maxTeams || ""}
+                        value={editForm.teams || ""}
                         onChange={(e) =>
                           setEditForm({
                             ...editForm,
-                            maxTeams: Math.max(0, parseInt(e.target.value) || 0),
+                            teams: Math.max(0, parseInt(e.target.value) || 0),
                           })
                         }
                         placeholder="Ej: 16"
@@ -964,11 +1017,11 @@ export function ManageTournaments() {
                         type="number"
                         min="0"
                         step="1000"
-                        value={editForm.costPerTeam || ""}
+                        value={editForm.cost || ""}
                         onChange={(e) =>
                           setEditForm({
                             ...editForm,
-                            costPerTeam: Math.max(
+                            cost: Math.max(
                               0,
                               parseInt(e.target.value) || 0
                             ),
@@ -998,7 +1051,7 @@ export function ManageTournaments() {
                       Canchas
                     </label>
                     <div className="space-y-2">
-                      {editForm.courts.map((court) => (
+                      {editForm.fields.map((court) => (
                         <div key={court.id} className="flex gap-2 items-center">
                           <input
                             type="text"
@@ -1086,8 +1139,12 @@ export function ManageTournaments() {
                           style={{ fontWeight: 600, color: P.textPrimary }}
                         >
                           {pendingRegFile?.name ??
-                            editForm.regulationFileName ??
-                            "Sin reglamento cargado"}
+                            (
+                              editForm.rulesUrl
+                              ? editForm.rulesUrl.split("/").pop()
+                              : "Sin reglamento cargado"
+                            )
+                          }
                         </p>
                         <p className="text-xs" style={{ color: P.default }}>
                           {pendingRegFile
@@ -1117,7 +1174,7 @@ export function ManageTournaments() {
                         if (file)
                           setEditForm({
                             ...editForm,
-                            regulationFileName: file.name,
+                            rulesUrl: file.name,
                           });
                       }}
                     />

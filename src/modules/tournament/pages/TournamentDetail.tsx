@@ -112,15 +112,32 @@ export function TournamentDetail() {
   const [standings, setStandings] = useState<Standing[]>([]);
 
   useEffect(() => {
-    if (!id) return;
-    tournamentService.getById(Number(id))
-      .then((detail) => {
-        setTeams(detail.teams ?? []);
-        setMatches(detail.matches ?? []);
-        setStandings(detail.standings ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoadingData(false));
+  if (!id) return;
+
+  tournamentService
+    .getById(Number(id))
+    .then((detail) => {
+
+      console.log("Tournament detail:", detail);
+
+      setTeams([]);
+
+      setMatches([]);
+
+      setStandings([]);
+
+    })
+    .catch((err) => {
+      console.error("Error loading tournament:", err);
+
+      setTeams([]);
+      setMatches([]);
+      setStandings([]);
+    })
+    .finally(() => {
+      setLoadingData(false);
+    });
+
   }, [id]);
 
   // ── Match detail modal ──
@@ -148,7 +165,7 @@ export function TournamentDetail() {
   const topScorers = Object.entries(scorersMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   const sortedStandings = [...standings].sort(
-    (a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc)
+    (a, b) => b.points - a.points || (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst)
   );
 
   // ── Handlers ──
@@ -382,9 +399,9 @@ export function TournamentDetail() {
                 {sortedStandings.map((s, i) => {
                   const isTop  = i < 2;
                   const isElim = i >= sortedStandings.length - 1;
-                  const dg     = s.gf - s.gc;
+                  const dg     = s.goalsFor - s.goalsAgainst;
                   return (
-                    <tr key={s.team} style={{ background: i === 0 ? "rgba(196,132,29,0.05)" : "transparent" }}>
+                    <tr key={s.teamId} style={{ background: i === 0 ? "rgba(196,132,29,0.05)" : "transparent" }}>
                       <td style={{
                         padding: "8px", borderBottom: "1px solid rgba(0,0,0,0.04)",
                         borderLeft: `3px solid ${isTop ? P.success : isElim ? P.primary : "transparent"}`,
@@ -396,14 +413,14 @@ export function TournamentDetail() {
                           color: isTop ? P.success : P.default,
                         }}>{i + 1}</span>
                       </td>
-                      <td style={{ padding: "8px", fontWeight: i === 0 ? 800 : 600, color: P.textPrimary, fontSize: "0.84rem", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>{s.team}</td>
-                      {[s.pj, s.g, s.e, s.p, s.gf, s.gc].map((v, ci) => (
+                      <td style={{ padding: "8px", fontWeight: i === 0 ? 800 : 600, color: P.textPrimary, fontSize: "0.84rem", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>{s.teamId}</td>
+                      {[s.matchesPlayed, s.matchesWon, s.matchesLost, s.points, s.goalsFor, s.goalsAgainst].map((v, ci) => (
                         <td key={ci} style={{ padding: "8px", fontSize: "0.84rem", color: P.default, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>{v}</td>
                       ))}
                       <td style={{ padding: "8px", fontSize: "0.84rem", fontWeight: 700, borderBottom: "1px solid rgba(0,0,0,0.04)", color: dg > 0 ? P.success : dg < 0 ? P.primary : P.default }}>
                         {dg > 0 ? `+${dg}` : dg}
                       </td>
-                      <td style={{ padding: "8px", fontSize: "0.84rem", fontWeight: 800, color: P.textPrimary, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>{s.pts}</td>
+                      <td style={{ padding: "8px", fontSize: "0.84rem", fontWeight: 800, color: P.textPrimary, borderBottom: "1px solid rgba(0,0,0,0.04)" }}>{s.points}</td>
                     </tr>
                   );
                 })}
