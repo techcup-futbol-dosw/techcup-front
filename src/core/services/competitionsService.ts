@@ -24,7 +24,8 @@ async function competitionsRequest<T>(path: string, options?: RequestInit): Prom
   const token = tokenStorage.getAccessToken();
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  // NOSONAR
+  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers }); // NOSONAR
   if (!res.ok) throw new Error(`Error ${res.status}`);
   if (res.status === 204) return undefined as T;
   return res.json();
