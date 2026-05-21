@@ -6,7 +6,7 @@
  * @returns Nombre sanitizado listo para guardar en Storage
  * Esta clase se encarga de cambiar el nombre de los archivos para que sean compatibles con los sistemas de archivos y URLs, 
  * eliminando caracteres especiales, espacios y convirtiendo todo a minúsculas.
- * (cambio 2 para volver a subirlo)
+ * (cambio 2 para volver a subirlo).
  */
 export function sanitizeFileName(originalName: string): string {
   const lastDot = originalName.lastIndexOf('.');
