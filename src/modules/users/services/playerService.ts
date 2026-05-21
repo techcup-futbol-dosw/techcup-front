@@ -1,14 +1,14 @@
 import { http } from "@/core/api/http";
 
 export type PlayerDto = {
-    id: string;
+    id: number;
     nombre: string;
     identificacion: string;
     edad: number;
     genero: "masculino" | "femenino" | "otro";
     posicion: string;
     semestre: string;
-    dorsal: string;
+    dorsal: number;
     disponibilidad: boolean;
     email: string;
 };
@@ -44,7 +44,7 @@ export const playerService = {
         return http.get<PlayerDto[]>(`/players?${buildParams(filters)}`);
     },
 
-    invite(playerId: string) {
+    invite(playerId: number | string) {
         return http.post<void>(`/players/${playerId}/invite`);
     },
 };
