@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import logoTechcup from "@/assets/logo.png";
 import { tournamentService, type TournamentDto } from "../services/tournamentService";
+import { useAuth } from "@/core/auth/AuthContext";
 import {
   User,
   LogOut,
@@ -89,6 +90,7 @@ const STATUS_ORDER: TournamentStatus[] = ["draft", "active", "in_progress", "fin
 // ── Component ─────────────────────────────────────
 export function ManageTournaments() {
   const navigate = useNavigate();
+  const { accountId } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +103,10 @@ export function ManageTournaments() {
 
   const fetchTournaments = () => {
     setLoading(true);
-    tournamentService.list()
+    const fetch = accountId
+      ? tournamentService.listByOrganizer(accountId)
+      : tournamentService.list();
+    fetch
       .then(setTournaments)
       .catch(() => setTournaments([]))
       .finally(() => setLoading(false));

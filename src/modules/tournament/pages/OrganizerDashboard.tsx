@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { tournamentService } from "@/modules/tournament/services/tournamentService";
+import { useAuth } from "@/core/auth/AuthContext";
 import logoTechcup from "@/assets/logo.png";
 import {
   User,
@@ -208,6 +209,7 @@ function TorneoVigenteCard({ torneo }: { torneo: TorneoVigente | null }) {
 // ── OrganizerDashboard ────────────────────────────
 export function OrganizerDashboard() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
   const [torneoVigente, setTorneoVigente] = useState<TorneoVigente | null>(null);
 
@@ -237,9 +239,10 @@ export function OrganizerDashboard() {
       .catch(() => {});
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogout(false);
     sessionStorage.removeItem("userContext");
+    await logout();
     navigate("/login");
   };
 

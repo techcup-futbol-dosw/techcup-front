@@ -1,7 +1,40 @@
 import { http } from "@/core/api/http";
 import { sanitizeFileName } from "@/core/utils/fileutils";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// ── Backend raw types (lo que devuelve el microservicio) ───────────────────
+
+type BackendInscription = {
+    id: number;
+    teamId: number;
+    captainId: number;
+    paymentUrl: string | null;
+    date: string;
+    status: string;          // "REVIEW" | "APPROVED" | "DECLINED" | "CANCELLED"
+    tournamentId: number;
+};
+
+type BackendSoccerField = {
+    id: number;
+    name: string;
+    description: string;
+};
+
+type BackendTournament = {
+    id: number;
+    organizerId: number;
+    name: string;
+    startDate: string;        // "YYYY-MM-DDTHH:mm:ss"
+    endDate: string;
+    endInscriptions: string;
+    cost: number;
+    rulesUrl: string | null;
+    status: string;           // "DRAFT" | "ACTIVE" | "IN_PROGRESS" | "FINISHED"
+    inscriptions: BackendInscription[];
+    fields: BackendSoccerField[];
+    teams: number;            // maxTeams
+};
+
+// ── Frontend public types ──────────────────────────────────────────────────
 
 export type TournamentStatus = "draft" | "active" | "in_progress" | "finished";
 
@@ -13,6 +46,7 @@ export type CourtDto = {
 
 export type TournamentDto = {
     id: number;
+    organizerId: number;
     name: string;
     status: TournamentStatus;
     startDate: string;
@@ -24,6 +58,7 @@ export type TournamentDto = {
     regulationFileName?: string;
     approvedTeams: number;
     totalRevenue: number;
+    inscriptions: BackendInscription[];
 };
 
 export type TournamentTeamDto = {
@@ -67,6 +102,7 @@ export type TournamentDetailDto = TournamentDto & {
 };
 
 export type CreateTournamentRequest = {
+    organizerId?: number;
     name: string;
     maxTeams: number;
     startDate: string;
@@ -89,43 +125,152 @@ export type CreateMatchRequest = {
 
 export type UpdateMatchRequest = Partial<TournamentMatchDto>;
 
+// ── Helpers de mapeo ───────────────────────────────────────────────────────
+
+function mapStatus(backendStatus: string): TournamentStatus {
+    const map: Record<string, TournamentStatus> = {
+        DRAFT: "draft",
+        ACTIVE: "active",
+        IN_PROGRESS: "in_progress",
+        FINISHED: "finished",
+    };
+    return map[backendStatus] ?? "draft";
+}
+
+function toDateString(isoDateTime: string | null | undefined): string {
+    if (!isoDateTime) return "";
+    return isoDateTime.split("T")[0];
+}
+
+function toIsoDateTime(date: string): string {
+    if (!date) return "";
+    return date.includes("T") ? date : `${date}T00:00:00`;
+}
+
+function mapToFrontend(raw: BackendTournament): TournamentDto {
+    const approvedTeams = (raw.inscriptions ?? []).filter(
+        (i) => i.status === "APPROVED"
+    ).length;
+    return {
+        id: raw.id,
+        organizerId: raw.organizerId,
+        name: raw.name,
+        status: mapStatus(raw.status),
+        startDate: toDateString(raw.startDate),
+        endDate: toDateString(raw.endDate),
+        registrationCloseDate: toDateString(raw.endInscriptions),
+        maxTeams: raw.teams,
+        costPerTeam: raw.cost,
+        courts: (raw.fields ?? []).map((f) => ({
+            id: f.id,
+            name: f.name,
+            description: f.description,
+        })),
+        regulationFileName: raw.rulesUrl ?? undefined,
+        approvedTeams,
+        totalRevenue: approvedTeams * raw.cost,
+        inscriptions: raw.inscriptions ?? [],
+    };
+}
+
+function buildCreatePayload(
+    req: CreateTournamentRequest
+): Record<string, unknown> {
+    return {
+        organizerId: req.organizerId ?? null,
+        name: req.name,
+        teams: req.maxTeams,
+        startDate: toIsoDateTime(req.startDate),
+        endDate: toIsoDateTime(req.endDate),
+        endInscriptions: toIsoDateTime(req.registrationCloseDate),
+        cost: req.costPerTeam,
+        fieldIds: req.courtIds ?? [],
+        rulesUrl: req.regulationPdfUrl ?? null,
+    };
+}
+
+function buildUpdatePayload(
+    req: UpdateTournamentRequest
+): Record<string, unknown> {
+    const payload: Record<string, unknown> = {};
+    if (req.name !== undefined) payload.name = req.name;
+    if (req.maxTeams !== undefined) payload.teams = req.maxTeams;
+    if (req.startDate !== undefined) payload.startDate = toIsoDateTime(req.startDate);
+    if (req.endDate !== undefined) payload.endDate = toIsoDateTime(req.endDate);
+    if (req.registrationCloseDate !== undefined)
+        payload.endInscriptions = toIsoDateTime(req.registrationCloseDate);
+    if (req.costPerTeam !== undefined) payload.cost = req.costPerTeam;
+    if (req.courtIds !== undefined) payload.fieldIds = req.courtIds;
+    if (req.regulationPdfUrl !== undefined) payload.rulesUrl = req.regulationPdfUrl;
+    return payload;
+}
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 export const tournamentService = {
     list() {
-        return http.get<TournamentDto[]>("/tournaments");
+        return http
+            .get<BackendTournament[]>("/api/tournaments")
+            .then((list) => list.map(mapToFrontend));
+    },
+
+    listByOrganizer(organizerId: number) {
+        return http
+            .get<BackendTournament[]>(`/api/tournaments/organizer/${organizerId}`)
+            .then((list) => list.map(mapToFrontend));
     },
 
     getById(id: number) {
-        return http.get<TournamentDetailDto>(`/tournaments/${id}`);
+        return http
+            .get<BackendTournament>(`/api/tournaments/${id}`)
+            .then((raw): TournamentDetailDto => ({
+                ...mapToFrontend(raw),
+                teams: [],
+                matches: [],
+                standings: [],
+            }));
     },
 
     create(payload: CreateTournamentRequest) {
-        return http.post<TournamentDto>("/tournaments", payload);
+        return http
+            .post<BackendTournament>("/api/tournaments", buildCreatePayload(payload))
+            .then(mapToFrontend);
     },
 
     update(id: number, payload: UpdateTournamentRequest) {
-        return http.put<TournamentDto>(`/tournaments/${id}`, payload);
+        return http
+            .put<BackendTournament>(`/api/tournaments/${id}`, buildUpdatePayload(payload))
+            .then(mapToFrontend);
     },
 
     delete(id: number) {
-        return http.delete<void>(`/tournaments/${id}`);
+        return http.delete<void>(`/api/tournaments/${id}`);
     },
 
     activate(id: number) {
-        return http.patch<TournamentDto>(`/tournaments/${id}/activate`);
+        return http
+            .put<BackendTournament>(`/api/tournaments/${id}/activate`)
+            .then(mapToFrontend);
     },
 
     start(id: number) {
-        return http.patch<TournamentDto>(`/tournaments/${id}/start`);
+        return http
+            .put<BackendTournament>(`/api/tournaments/${id}/start`)
+            .then(mapToFrontend);
     },
 
     finish(id: number) {
-        return http.patch<TournamentDto>(`/tournaments/${id}/finish`);
+        return http
+            .put<BackendTournament>(`/api/tournaments/${id}/finish`)
+            .then(mapToFrontend);
     },
 
     getCourts() {
-        return http.get<CourtDto[]>("/courts");
+        return http.get<CourtDto[]>("/api/soccerfields");
+    },
+
+    getCourtsByTournament(tournamentId: number) {
+        return http.get<CourtDto[]>(`/api/soccerfields/tournament/${tournamentId}`);
     },
 
     uploadRegulation(file: File) {
@@ -133,14 +278,42 @@ export const tournamentService = {
         const renamedFile = new File([file], sanitizedName, { type: file.type });
         const body = new FormData();
         body.append("file", renamedFile);
-        return http.post<{ url: string; fileName: string }>("/tournaments/regulation/upload", body);
+        return http.post<{ url: string; fileName: string }>(
+            "/api/tournaments/regulation/upload",
+            body
+        );
     },
 
     createMatch(tournamentId: number, payload: CreateMatchRequest) {
-        return http.post<TournamentMatchDto>(`/tournaments/${tournamentId}/matches`, payload);
+        return http.post<TournamentMatchDto>(`/api/matches`, {
+            ...payload,
+            tournamentId,
+        });
     },
 
     updateMatch(matchId: number, payload: UpdateMatchRequest) {
-        return http.put<TournamentMatchDto>(`/matches/${matchId}`, payload);
+        return http.put<TournamentMatchDto>(`/api/matches/${matchId}`, payload);
+    },
+
+    getApprovedTeams(tournamentId: number) {
+        return http.get<number[]>(`/api/tournaments/${tournamentId}/approved-teams`);
+    },
+
+    getTournamentInscriptions(tournamentId: number) {
+        return http.get<BackendInscription[]>(
+            `/api/inscriptions/tournaments/${tournamentId}`
+        );
+    },
+
+    approveInscription(inscriptionId: number) {
+        return http.put<BackendInscription>(
+            `/api/inscriptions/${inscriptionId}/approve`
+        );
+    },
+
+    rejectInscription(inscriptionId: number) {
+        return http.put<BackendInscription>(
+            `/api/inscriptions/${inscriptionId}/reject`
+        );
     },
 };

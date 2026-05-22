@@ -6,6 +6,7 @@ import React from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/core/auth/AuthContext";
 import logoTechcup from "@/assets/logo.png";
 import { matchService, type AssignedMatchDto } from "../services/matchService";
 import {
@@ -108,6 +109,7 @@ const statusConfig: Record<MatchStatus, { label: string; color: string; glassCol
 // ── ArbitroDashboard ──────────────────────────────
 export function ArbitroDashboard() {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -145,9 +147,10 @@ export function ArbitroDashboard() {
     return () => el.removeEventListener("scroll", updateScroll);
   }, []);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setShowLogout(false);
     sessionStorage.removeItem("userContext");
+    await logout();
     navigate("/login");
   };
 

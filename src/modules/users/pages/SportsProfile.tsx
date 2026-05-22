@@ -1,5 +1,5 @@
-/**
- * @file src/modules/users/pages/SportsProfile.tsx
+﻿/**
+ * @file src/modules/users/pages/Profile.tsx
  * @description Perfil deportivo - Cognitive Complexity = 0 (solo calls)
  */
 import { motion, AnimatePresence } from "motion/react";
@@ -14,7 +14,6 @@ interface SportsProfileData {
   posicion: string;
   dorsal: string;
   foto: string | null;
-  disponible: boolean;
 }
 
 interface ValidationResult {
@@ -64,7 +63,7 @@ function getDashboardPath(userContext: string): string {
   if (userContext === "arbitro") {
     return "/dashboard-arbitro";
   }
-  return "/dashboard-player";
+  return "/dashboard";
 }
 
 function getBorderColor(hasError: boolean, isTouched: boolean): string {
@@ -168,42 +167,6 @@ function getToastBoxShadow(feedbackType: "success" | "error"): string {
   return `0 12px 40px ${color}45`;
 }
 
-function getDisponibleButtonBackgroundColor(isDisponible: boolean, isSelected: boolean): string {
-  if (isSelected) {
-    return isDisponible ? P.success : P.primary;
-  }
-  return "white";
-}
-
-function getDisponibleButtonTextColor(isSelected: boolean): string {
-  return isSelected ? "white" : P.textPrimary;
-}
-
-function getDisponibleButtonBorderColor(isDisponible: boolean, isSelected: boolean): string {
-  if (isSelected) {
-    return isDisponible ? P.success : P.primary;
-  }
-  return P.default;
-}
-
-function getDisponibleButtonStyle(isDisponible: boolean, isSelected: boolean): React.CSSProperties {
-  const bgColor = getDisponibleButtonBackgroundColor(isDisponible, isSelected);
-  const textColor = getDisponibleButtonTextColor(isSelected);
-  const borderColor = getDisponibleButtonBorderColor(isDisponible, isSelected);
-
-  return {
-    flex: 1,
-    padding: "14px 20px",
-    borderRadius: 14,
-    backgroundColor: bgColor,
-    color: textColor,
-    border: `1.5px solid ${borderColor}30`,
-    fontWeight: 700,
-    cursor: "pointer",
-    transition: "all 0.2s",
-  };
-}
-
 // ═══════════════════════════════════════════════════════════
 // BUSINESS LOGIC
 // ═══════════════════════════════════════════════════════════
@@ -292,31 +255,16 @@ export function SportsProfile() {
     posicion: "",
     dorsal: "",
     foto: null,
-    disponible: true,
   });
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [existingProfileId, setExistingProfileId] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<"success" | "error">("success");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [existingProfileId, setExistingProfileId] = useState<number | null>(null);
+  const photoFileRef = useRef<File | null>(null);
   const toastRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!accountId) return;
-    sportProfileService.getByUserId(accountId).then((profile) => {
-      if (!profile) return;
-      setExistingProfileId(profile.id);
-      setProfileData({
-        posicion: profile.position,
-        dorsal: profile.dorsalNumber != null ? String(profile.dorsalNumber).padStart(2, "0") : "",
-        foto: null,
-        disponible: profile.available,
-      });
-    });
-  }, [accountId]);
 
   useEffect(() => {
     if (feedbackMessage && toastRef.current) {
@@ -328,18 +276,34 @@ export function SportsProfile() {
     }
   }, [feedbackMessage]);
 
+  useEffect(() => {
+    if (!accountId) return;
+    sportProfileService.getByUserId(accountId)
+      .then((sp) => {
+        setExistingProfileId(sp.id);
+        setProfileData({
+          posicion: sp.position ?? "",
+          dorsal: sp.dorsalNumber != null ? String(sp.dorsalNumber) : "",
+          foto: null,
+        });
+      })
+      .catch(() => {
+        /* Sin perfil previo — crear uno nuevo al guardar */
+      });
+  }, [accountId]);
+
   const handleBack = () => navigate(dashboardPath);
 
   const showFeedback = (message: string, type: "success" | "error" = "success") => {
     setFeedbackMessage(message);
     setFeedbackType(type);
-    globalThis.setTimeout(() => setFeedbackMessage(null), 2800);
+    setTimeout(() => setFeedbackMessage(null), 2800);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setPhotoFile(file);
+    photoFileRef.current = file;
     handleImageUploadLogic(file, errors, setErrors, setProfileData, setPreviewImage, showFeedback);
   };
 
@@ -370,9 +334,8 @@ export function SportsProfile() {
   };
 
   const handleReset = () => {
-    setProfileData({ posicion: "", dorsal: "", foto: null, disponible: true });
+    setProfileData({ posicion: "", dorsal: "", foto: null });
     setPreviewImage(null);
-    setPhotoFile(null);
     setErrors({});
     setTouched({});
     showFeedback("Cambios descartados", "success");
@@ -385,27 +348,26 @@ export function SportsProfile() {
       return;
     }
     if (!accountId) {
-      showFeedback("No se pudo identificar tu sesión. Vuelve a iniciar sesión.", "error");
+      showFeedback("No se pudo identificar tu cuenta. Vuelve a iniciar sesión.", "error");
       return;
     }
 
     setIsSaving(true);
     try {
       const payload = {
-        position:     profileData.posicion,
-        dorsalNumber: Number.parseInt(profileData.dorsal, 10),
-        available:    profileData.disponible,
+        position: profileData.posicion,
+        dorsalNumber: parseInt(profileData.dorsal, 10),
+        available: true,
       };
-
-      if (existingProfileId) {
-        await sportProfileService.update(existingProfileId, payload, photoFile ?? undefined);
+      const photo = photoFileRef.current ?? undefined;
+      if (existingProfileId != null) {
+        await sportProfileService.update(existingProfileId, payload, photo);
       } else {
-        const created = await sportProfileService.create(accountId, payload, photoFile ?? undefined);
+        const created = await sportProfileService.create(accountId, payload, photo);
         setExistingProfileId(created.id);
       }
-
       showFeedback("¡Perfil deportivo guardado exitosamente!", "success");
-      globalThis.setTimeout(() => navigate(dashboardPath), 1600);
+      setTimeout(() => navigate(dashboardPath), 1600);
     } catch {
       showFeedback("No se pudo guardar el perfil. Intenta nuevamente.", "error");
     } finally {
@@ -413,7 +375,7 @@ export function SportsProfile() {
     }
   };
 
-  // ─── COMPUTED VALUES ───
+  // ─── COMPUTED VALUES (sin ternarios aquí, todos extracts) ───
   const isFormValid = getFormValidationStatus(profileData, errors);
   const dorsalBorderStyle = getBorderStyle(!!errors.dorsal, touched.dorsal || false);
   const posicionBorderStyle = getBorderStyle(!!errors.posicion, touched.posicion || false);
@@ -427,8 +389,6 @@ export function SportsProfile() {
   const buttonTapScaleVal = getButtonTapScale(isFormValid, isSaving);
   const toastBgColor = getToastBackgroundColor(feedbackType);
   const toastBoxShadowVal = getToastBoxShadow(feedbackType);
-  const disponibleButtonStyle = getDisponibleButtonStyle(true, profileData.disponible);
-  const noDisponibleButtonStyle = getDisponibleButtonStyle(false, !profileData.disponible);
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: P.bg }}>
@@ -488,7 +448,6 @@ export function SportsProfile() {
         <div style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(242,242,247,0.85)" }} className="px-6 lg:px-10">
           <div className="h-16 flex items-center">
             <button
-              type="button"
               onClick={handleBack}
               className="w-9 h-9 rounded-xl bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
               aria-label="Volver al dashboard"
@@ -698,44 +657,6 @@ export function SportsProfile() {
                 </AnimatePresence>
               </motion.div>
 
-              {/* Disponibilidad para Invitaciones */}
-              <motion.div layout>
-                <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
-                  <legend
-                    style={{
-                      display: "block",
-                      fontSize: "0.85rem",
-                      fontWeight: 700,
-                      color: P.textPrimary,
-                      marginBottom: 12,
-                    }}
-                  >
-                    Disponibilidad para Invitaciones
-                  </legend>
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <button
-                      type="button"
-                      onClick={() => setProfileData((prev) => ({ ...prev, disponible: true }))}
-                      style={disponibleButtonStyle}
-                      aria-pressed={profileData.disponible}
-                    >
-                      ✓ Disponible
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProfileData((prev) => ({ ...prev, disponible: false }))}
-                      style={noDisponibleButtonStyle}
-                      aria-pressed={!profileData.disponible}
-                    >
-                      ✕ No disponible
-                    </button>
-                  </div>
-                </fieldset>
-                <p style={{ marginTop: 8, color: "#8A8A8E", fontSize: "0.85rem" }}>
-                  Indica si deseas recibir invitaciones a equipos y torneos
-                </p>
-              </motion.div>
-
               {/* Botones de acción */}
               <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
                 <motion.button
@@ -822,7 +743,7 @@ export function SportsProfile() {
               <div>
                 <p style={{ margin: 0, color: P.default, fontSize: "0.9rem", lineHeight: 1.5 }}>
                   <strong style={{ color: P.textPrimary }}>¿Por qué es importante?</strong>{" "}
-                  Esta información ayuda a los organizadores a formar equipos equilibrados basándose en posiciones, números de dorsal únicos y disponibilidad para invitaciones.
+                  Esta información ayuda a los organizadores a formar equipos equilibrados y balanceados basándose en posiciones y números de dorsal únicos.
                 </p>
               </div>
             </motion.div>

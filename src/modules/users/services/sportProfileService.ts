@@ -1,10 +1,9 @@
 import { http } from "@/core/api/http";
 
-// Matches SportProfileResponse from the backend
-export type SportProfileDto = {
+export type SportProfileResponse = {
     id: number;
     userId: number;
-    position: "GOALKEEPER" | "DEFENDER" | "MIDFIELDER" | "FORWARD";
+    position: "GOALKEEPER" | "DEFENDER" | "MIDFIELDER" | "FORWARD" | null;
     dorsalNumber: number | null;
     photoId: string | null;
     available: boolean;
@@ -12,47 +11,32 @@ export type SportProfileDto = {
     updatedAt: string;
 };
 
-export type SportProfilePayload = {
+export type SportProfileRequest = {
     position: string;
     dorsalNumber: number;
     available: boolean;
 };
 
-// Maps Spanish form values → backend enum values
-export const POSITION_MAP: Record<string, string> = {
-    portero:   "GOALKEEPER",
-    defensa:   "DEFENDER",
-    volante:   "MIDFIELDER",
-    delantero: "FORWARD",
-};
-
-// Maps backend enum values → Spanish form values
-export const POSITION_MAP_REVERSE: Record<string, string> = {
-    GOALKEEPER: "portero",
-    DEFENDER:   "defensa",
-    MIDFIELDER: "volante",
-    FORWARD:    "delantero",
-};
-
 export const sportProfileService = {
-    /** Load the sport profile for a given user. Returns null if not found. */
-    getByUserId(userId: number): Promise<SportProfileDto | null> {
-        return http.get<SportProfileDto>(`/api/sport-profiles/user/${userId}`).catch(() => null);
+    getByUserId(userId: number) {
+        return http.get<SportProfileResponse>(`/api/sport-profiles/user/${userId}`);
     },
 
-    /** Create a new sport profile. Photo is optional. */
-    create(userId: number, payload: SportProfilePayload, photo?: File): Promise<SportProfileDto> {
+    create(userId: number, data: SportProfileRequest, photo?: File | null) {
         const form = new FormData();
-        form.append("profile", new Blob([JSON.stringify(payload)], { type: "application/json" }));
+        form.append("profile", new Blob([JSON.stringify(data)], { type: "application/json" }));
         if (photo) form.append("photo", photo);
-        return http.post<SportProfileDto>(`/api/sport-profiles/user/${userId}`, form);
+        return http.post<SportProfileResponse>(`/api/sport-profiles/user/${userId}`, form);
     },
 
-    /** Update an existing sport profile. Photo is optional. */
-    update(profileId: number, payload: SportProfilePayload, photo?: File): Promise<SportProfileDto> {
+    update(profileId: number, data: SportProfileRequest, photo?: File | null) {
         const form = new FormData();
-        form.append("profile", new Blob([JSON.stringify(payload)], { type: "application/json" }));
+        form.append("profile", new Blob([JSON.stringify(data)], { type: "application/json" }));
         if (photo) form.append("photo", photo);
-        return http.put<SportProfileDto>(`/api/sport-profiles/${profileId}`, form);
+        return http.put<SportProfileResponse>(`/api/sport-profiles/${profileId}`, form);
+    },
+
+    updateAvailability(profileId: number, available: boolean) {
+        return http.patch<void>(`/api/sport-profiles/${profileId}/availability?available=${available}`);
     },
 };

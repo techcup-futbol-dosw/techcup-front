@@ -288,6 +288,7 @@ function LoginForm() {
 
                   {/* Password */}
                   <div>
+                    {/*
                     <div className="flex justify-between items-center mb-1.5">
                       <label style={{ fontSize: "0.78rem", fontWeight: 600, color: "#6E6E73" }}>Contraseña</label>
                       <button
@@ -297,7 +298,7 @@ function LoginForm() {
                       >
                         ¿Olvidaste tu contraseña?
                       </button>
-                    </div>
+                    </div> */}
                     <div className="relative">
                       <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#6E6E73" }} />
                       <input
