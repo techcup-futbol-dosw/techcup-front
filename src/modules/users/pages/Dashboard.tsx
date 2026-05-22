@@ -6,6 +6,7 @@ import logoTechcup from "@/assets/logo.png";
 import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
 import { useAuth } from "@/core/auth/AuthContext";
 import { teamService } from "@/modules/teams/services/teamService";
+import { tournamentService } from "@/modules/tournament/services/tournamentService";
 import { notificationService } from "@/modules/users/services/notificationService";
 import { userService } from "@/modules/users/services/userService";
 import {
@@ -478,7 +479,16 @@ function InscriptionModal({
     }
     setSubmitting(true);
     setSubmitError("");
+    let createdTeamId: number | null = null;
     try {
+      const activeTournament = (await tournamentService.list()).find(
+        (tournament) => tournament.status === "active" || tournament.status === "in_progress"
+      );
+
+      if (!activeTournament) {
+        throw new Error("No hay un torneo activo disponible para inscribir el equipo.");
+      }
+
       // 1. Crear el equipo primero para obtener el teamId
       const team = await teamService.create({
         name: teamName.trim(),
@@ -487,7 +497,7 @@ function InscriptionModal({
         secondaryColor: P.secondary,
         logoUrl: null,
       });
-      const createdTeamId = team.id;
+      createdTeamId = team.id;
 
       // 2. Registrar al capitán como miembro con su dorsal
       await teamService.addMember(createdTeamId, {
@@ -509,6 +519,14 @@ function InscriptionModal({
         )
       );
 
+      // 4. Registrar la inscripción del equipo en el torneo activo
+      await tournamentService.createInscription({
+        tournamentId: activeTournament.id,
+        teamId: createdTeamId,
+        captainId: accountId,
+        paymentUrl: "",
+      });
+
       const failedCount = playerResults.filter((r) => r.status === "rejected").length;
 
       const members: TeamRosterMember[] = [
@@ -525,6 +543,9 @@ function InscriptionModal({
         console.warn(`${failedCount} jugador(es) no pudieron añadirse al equipo.`);
       }
     } catch (error) {
+      if (createdTeamId !== null) {
+        await teamService.deleteTeam(createdTeamId).catch(() => {});
+      }
       const message =
         error instanceof Error && error.message
           ? error.message

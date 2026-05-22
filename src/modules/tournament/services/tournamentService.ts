@@ -123,6 +123,13 @@ export type CreateMatchRequest = {
     teamBId: number;
 };
 
+export type CreateInscriptionRequest = {
+    tournamentId: number;
+    teamId: number;
+    captainId: number;
+    paymentUrl: string;
+};
+
 export type UpdateMatchRequest = Partial<TournamentMatchDto>;
 
 // ── Helpers de mapeo ───────────────────────────────────────────────────────
@@ -303,6 +310,10 @@ export const tournamentService = {
         return http.get<BackendInscription[]>(
             `/api/inscriptions/tournaments/${tournamentId}`
         );
+    },
+
+    createInscription(payload: CreateInscriptionRequest) {
+        return http.post<BackendInscription>("/api/inscriptions", payload);
     },
 
     approveInscription(inscriptionId: number) {
