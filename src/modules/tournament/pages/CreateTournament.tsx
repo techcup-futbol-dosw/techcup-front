@@ -219,11 +219,11 @@ export function CreateTournament() {
     try {
       await tournamentService.create({
         name:                  formData.nombreTorneo.trim(),
-        teams:                 formData.cantidadEquipos,       
+        maxTeams:              formData.cantidadEquipos,
         startDate:             formData.fechaInicio,
         endDate:               formData.fechaFin,
         registrationCloseDate: formData.fechaCierreInscripciones,
-        cost:                  formData.costoPorEquipo,       
+        costPerTeam:           formData.costoPorEquipo,
         courtIds:              formData.canchasIds,
         regulationPdfUrl:      formData.reglamentoPdfUrl,
       });
