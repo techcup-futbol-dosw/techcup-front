@@ -2,40 +2,43 @@ import { http } from "@/core/api/http";
 
 export type PlayerDto = {
     id: number;
-    nombre: string;
-    identificacion: string;
-    edad: number;
-    genero: "masculino" | "femenino" | "otro";
-    posicion: string;
-    semestre: string;
-    dorsal: number;
-    disponibilidad: boolean;
+    fullName: string;
     email: string;
+    identification: string | null;
+    birthDate: string | null;
+    gender: "MALE" | "FEMALE" | "OTHER" | null;
+    schoolRelation: string | null;
+    academicProgram: string | null;
+    semester: number | null;
+    status: string | null;
+    profileCreatedAt: string | null;
+    updatedAt: string | null;
+    position: "GOALKEEPER" | "DEFENDER" | "MIDFIELDER" | "FORWARD" | null;
+    dorsalNumber: number | null;
+    available: boolean | null;
 };
 
 export type PlayerSearchFilters = {
-    query?: string;
-    posicion?: string;
-    genero?: string;
-    semestre?: string;
-    edadMin?: number;
-    edadMax?: number;
-    soloDisponibles?: boolean;
-    page?: number;
-    size?: number;
+    name?: string;
+    position?: string;
+    gender?: string;
+    semester?: number;
+    age?: number;
+    identification?: string;
+    available?: boolean;
+    status?: string;
 };
 
 function buildParams(filters: PlayerSearchFilters): string {
     const params = new URLSearchParams();
-    if (filters.query?.trim())        params.set("query",          filters.query.trim());
-    if (filters.posicion?.trim())     params.set("posicion",       filters.posicion.trim());
-    if (filters.genero?.trim())       params.set("genero",         filters.genero.trim());
-    if (filters.semestre?.trim())     params.set("semestre",       filters.semestre.trim());
-    if (filters.edadMin != null)      params.set("edadMin",        String(filters.edadMin));
-    if (filters.edadMax != null)      params.set("edadMax",        String(filters.edadMax));
-    if (filters.soloDisponibles)      params.set("disponible",     "true");
-    params.set("page", String(filters.page ?? 0));
-    params.set("size", String(filters.size ?? 20));
+    if (filters.name?.trim())            params.set("name",           filters.name.trim());
+    if (filters.position?.trim())        params.set("position",       filters.position.trim());
+    if (filters.gender?.trim())          params.set("gender",         filters.gender.trim());
+    if (filters.semester != null)        params.set("semester",       String(filters.semester));
+    if (filters.age != null)             params.set("age",            String(filters.age));
+    if (filters.identification?.trim())  params.set("identification", filters.identification.trim());
+    if (filters.available != null)       params.set("available",      String(filters.available));
+    if (filters.status?.trim())          params.set("status",         filters.status.trim());
     return params.toString();
 }
 

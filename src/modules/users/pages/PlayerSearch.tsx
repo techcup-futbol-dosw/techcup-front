@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router";
 import logoTechcup from "@/assets/logo.png";
 import { playerService, type PlayerDto } from "@/modules/users/services/playerService";
 import { teamService } from "@/modules/teams/services/teamService";
+import { ApiError } from "@/core/api/http";
 import {
   ArrowLeft,
   Search,
@@ -27,14 +28,23 @@ const P = {
   bg: "#F2F2F7",
 };
 
-// PlayerDto is imported from playerService
-
+// Mapeo de posición enum → metadatos visuales
 const positionMeta: Record<string, { label: string; bg: string; color: string }> = {
-  portero:   { label: "Portero",   bg: "rgba(0,102,254,0.10)",   color: "#0066FE" },
-  defensa:   { label: "Defensa",   bg: "rgba(23,201,100,0.10)",  color: "#17C964" },
-  volante:   { label: "Volante",   bg: "rgba(196,132,29,0.12)",  color: "#C4841D" },
-  delantero: { label: "Delantero", bg: "rgba(184,28,28,0.10)",   color: "#B81C1C" },
+  GOALKEEPER: { label: "Portero",   bg: "rgba(0,102,254,0.10)",   color: "#0066FE" },
+  DEFENDER:   { label: "Defensa",   bg: "rgba(23,201,100,0.10)",  color: "#17C964" },
+  MIDFIELDER: { label: "Volante",   bg: "rgba(196,132,29,0.12)",  color: "#C4841D" },
+  FORWARD:    { label: "Delantero", bg: "rgba(184,28,28,0.10)",   color: "#B81C1C" },
 };
+
+function getAge(birthDate: string | null): number | null {
+  if (!birthDate) return null;
+  const birth = new Date(birthDate);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  return age;
+}
 
 function highlight(text: string, query: string) {
   if (!query.trim()) return <span>{text}</span>;
@@ -74,8 +84,13 @@ function PlayerCard({
   onDorsalChange: (id: number, dorsal: string) => void;
   onActiveChange: (id: number, active: boolean) => void;
 }) {
-  const pos = positionMeta[player.posicion] ?? { label: player.posicion, bg: `${P.default}14`, color: P.default };
-  const avail = player.disponibilidad;
+  const pos = player.position
+    ? (positionMeta[player.position] ?? { label: player.position, bg: `${P.default}14`, color: P.default })
+    : { label: "Sin posición", bg: `${P.default}14`, color: P.default };
+
+  const avail = player.available ?? false;
+  const age = getAge(player.birthDate);
+  const dorsal_display = player.dorsalNumber ?? "—";
 
   return (
     <motion.article
@@ -97,13 +112,13 @@ function PlayerCard({
           className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-xl"
           style={{ background: `linear-gradient(135deg, ${P.primary}, ${P.secondary})`, fontWeight: 800 }}
         >
-          {player.dorsal}
+          {dorsal_display}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-base leading-snug" style={{ fontWeight: 700, color: P.textPrimary }}>
-              {highlight(player.nombre, query)}
+              {highlight(player.fullName ?? "", query)}
             </h3>
             <span
               className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1"
@@ -121,18 +136,22 @@ function PlayerCard({
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: pos.bg, color: pos.color }}>
               {pos.label}
             </span>
-            <span className="text-xs" style={{ color: P.default }}>{player.edad} años</span>
-            <span className="text-xs" style={{ color: P.default }}>·</span>
-            <span className="text-xs" style={{ color: P.default }}>{player.semestre}°</span>
+            {age != null && <span className="text-xs" style={{ color: P.default }}>{age} años</span>}
+            {age != null && <span className="text-xs" style={{ color: P.default }}>·</span>}
+            {player.semester != null && (
+              <span className="text-xs" style={{ color: P.default }}>Sem. {player.semester}</span>
+            )}
           </div>
         </div>
       </div>
 
       {/* Info */}
       <div className="rounded-xl px-3 py-2.5 space-y-0.5" style={{ backgroundColor: P.bg }}>
-        <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>
-          ID: <span style={{ color: P.textPrimary }}>{player.identificacion}</span>
-        </p>
+        {player.identification && (
+          <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>
+            ID: <span style={{ color: P.textPrimary }}>{player.identification}</span>
+          </p>
+        )}
         <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>
           <span style={{ color: P.textPrimary }}>{player.email}</span>
         </p>
@@ -153,7 +172,7 @@ function PlayerCard({
           />
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>memberRole</span>
+          <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>Rol</span>
           <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${P.info}15`, color: P.info, fontWeight: 800 }}>PLAYER</span>
         </div>
         <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
@@ -195,7 +214,7 @@ export default function PlayerSearch() {
   const teamContext = (location.state as { teamId?: number; teamName?: string } | null) ?? null;
 
   const [filters, setFilters] = useState({
-    nombre: "", identificacion: "", posicion: "", edad: "", genero: "", semestre: "", onlyAvailable: false,
+    name: "", identification: "", position: "", age: "", gender: "", semester: "", onlyAvailable: false,
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [players, setPlayers] = useState<PlayerDto[]>([]);
@@ -205,33 +224,37 @@ export default function PlayerSearch() {
   const [memberDrafts, setMemberDrafts] = useState<Record<number, { dorsal: string; active: boolean }>>({});
   const [toast, setToast] = useState<string | null>(null);
 
-  const [debouncedName, setDebouncedName] = useState(filters.nombre);
+  const [debouncedName, setDebouncedName] = useState(filters.name);
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedName(filters.nombre), 400);
+    const t = setTimeout(() => setDebouncedName(filters.name), 400);
     return () => clearTimeout(t);
-  }, [filters.nombre]);
+  }, [filters.name]);
 
   const fetchPlayers = useCallback(async () => {
     setLoading(true);
     setApiError(null);
     try {
       const data = await playerService.search({
-        query: debouncedName || undefined,
-        posicion: filters.posicion || undefined,
-        genero: filters.genero || undefined,
-        semestre: filters.semestre || undefined,
-        edad: filters.edad ? parseInt(filters.edad, 10) : undefined,
-        identificacion: filters.identificacion || undefined,
-        soloDisponibles: filters.onlyAvailable || undefined,
-      } as Parameters<typeof playerService.search>[0]);
+        name:           debouncedName || undefined,
+        position:       filters.position || undefined,
+        gender:         filters.gender || undefined,
+        semester:       filters.semester ? parseInt(filters.semester, 10) : undefined,
+        age:            filters.age ? parseInt(filters.age, 10) : undefined,
+        identification: filters.identification || undefined,
+        available:      filters.onlyAvailable || undefined,
+      });
       setPlayers(data);
-    } catch {
-      setApiError("No se pudo cargar la lista de jugadores.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setApiError("No tienes permisos para buscar jugadores. Esta función es exclusiva para capitanes y administradores.");
+      } else {
+        setApiError("No se pudo cargar la lista de jugadores.");
+      }
       setPlayers([]);
     } finally {
       setLoading(false);
     }
-  }, [debouncedName, filters.posicion, filters.genero, filters.semestre, filters.edad, filters.identificacion, filters.onlyAvailable]);
+  }, [debouncedName, filters.position, filters.gender, filters.semester, filters.age, filters.identification, filters.onlyAvailable]);
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
 
@@ -255,10 +278,12 @@ export default function PlayerSearch() {
   const update = (field: keyof typeof filters, value: string | boolean) =>
     setFilters((prev) => ({ ...prev, [field]: value }));
 
-  const results = players.sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const results = [...players].sort((a, b) =>
+    (a.fullName ?? "").localeCompare(b.fullName ?? "")
+  );
 
   const clearFilters = () => {
-    setFilters({ nombre: "", identificacion: "", posicion: "", edad: "", genero: "", semestre: "", onlyAvailable: false });
+    setFilters({ name: "", identification: "", position: "", age: "", gender: "", semester: "", onlyAvailable: false });
     setShowAdvanced(false);
   };
 
@@ -291,13 +316,13 @@ export default function PlayerSearch() {
     try {
       await teamService.addMember(currentTeamId, { memberRole: "PLAYER", playerId: id, dorsal, active: draft.active });
       setAddedMembers((prev) => new Set([...prev, id]));
-      if (p) setToast(`${p.nombre} añadido al equipo`);
+      if (p) setToast(`${p.fullName} añadido al equipo`);
     } catch {
       setToast("No se pudo añadir al jugador.");
     }
   };
 
-  const hasActiveFilters = filters.nombre || filters.identificacion || filters.posicion || filters.edad || filters.genero || filters.semestre || filters.onlyAvailable;
+  const hasActiveFilters = filters.name || filters.identification || filters.position || filters.age || filters.gender || filters.semester || filters.onlyAvailable;
 
   const inputStyle = {
     borderColor: "rgba(0,0,0,0.12)",
@@ -367,11 +392,11 @@ export default function PlayerSearch() {
                 <Search style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, color: P.default }} />
                 <input
                   ref={nameInputRef}
-                  value={filters.nombre}
-                  onChange={(e) => update("nombre", e.target.value)}
+                  value={filters.name}
+                  onChange={(e) => update("name", e.target.value)}
                   placeholder="Ej: Juan"
                   className="w-full border rounded-xl pl-8 pr-3 py-2.5 outline-none transition-all duration-200"
-                  style={{ ...inputStyle, borderColor: filters.nombre ? P.primary : "rgba(0,0,0,0.12)", boxShadow: filters.nombre ? `0 0 0 3px ${P.primary}12` : "none" }}
+                  style={{ ...inputStyle, borderColor: filters.name ? P.primary : "rgba(0,0,0,0.12)", boxShadow: filters.name ? `0 0 0 3px ${P.primary}12` : "none" }}
                 />
               </div>
             </div>
@@ -379,12 +404,12 @@ export default function PlayerSearch() {
             {/* Position */}
             <div className="w-full sm:w-44">
               <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Posición</label>
-              <select value={filters.posicion} onChange={(e) => update("posicion", e.target.value)} className="w-full border rounded-xl px-3 py-2.5 outline-none" style={inputStyle}>
+              <select value={filters.position} onChange={(e) => update("position", e.target.value)} className="w-full border rounded-xl px-3 py-2.5 outline-none" style={inputStyle}>
                 <option value="">Todas</option>
-                <option value="portero">Portero</option>
-                <option value="defensa">Defensa</option>
-                <option value="volante">Volante</option>
-                <option value="delantero">Delantero</option>
+                <option value="GOALKEEPER">Portero</option>
+                <option value="DEFENDER">Defensa</option>
+                <option value="MIDFIELDER">Volante</option>
+                <option value="FORWARD">Delantero</option>
               </select>
             </div>
 
@@ -436,29 +461,29 @@ export default function PlayerSearch() {
                 <div className="mt-4 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Identificación</label>
-                    <input value={filters.identificacion} onChange={(e) => update("identificacion", e.target.value)} placeholder="Ej: 1234567890" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
+                    <input value={filters.identification} onChange={(e) => update("identification", e.target.value)} placeholder="Ej: 1234567890" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Género</label>
-                    <select value={filters.genero} onChange={(e) => update("genero", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
+                    <select value={filters.gender} onChange={(e) => update("gender", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
                       <option value="">Todos</option>
-                      <option value="masculino">Masculino</option>
-                      <option value="femenino">Femenino</option>
-                      <option value="otro">Otro</option>
+                      <option value="MALE">Masculino</option>
+                      <option value="FEMALE">Femenino</option>
+                      <option value="OTHER">Otro</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Semestre</label>
-                    <select value={filters.semestre} onChange={(e) => update("semestre", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
+                    <select value={filters.semester} onChange={(e) => update("semester", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
                       <option value="">Todos</option>
-                      {Array.from({ length: 8 }, (_, i) => (
+                      {Array.from({ length: 10 }, (_, i) => (
                         <option key={i + 1} value={String(i + 1)}>Semestre {i + 1}</option>
                       ))}
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Edad</label>
-                    <input type="number" min="16" max="99" value={filters.edad} onChange={(e) => update("edad", e.target.value)} placeholder="Ej: 20" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
+                    <input type="number" min="16" max="99" value={filters.age} onChange={(e) => update("age", e.target.value)} placeholder="Ej: 20" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
                   </div>
                 </div>
               </motion.div>
