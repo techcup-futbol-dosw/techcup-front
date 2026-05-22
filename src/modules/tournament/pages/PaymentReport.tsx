@@ -20,6 +20,9 @@ import {
   Ban,
 } from "lucide-react";
 import { readUICache, writeUICache } from "@/core/utils/uiCache";
+import { useAuth } from "@/core/auth/AuthContext";
+import { tournamentService } from "@/modules/tournament/services/tournamentService";
+import { teamService } from "@/modules/teams/services/teamService";
 
 const P = {
   primary:     "#B81C1C",
@@ -94,6 +97,8 @@ export function PaymentReport() {
   const [inscripciones, setInscripciones] = useState<TeamInscripcion[]>(() =>
     readUICache<TeamInscripcion[]>("techcup.ui.paymentReport.inscripciones", [])
   );
+  const [loading, setLoading] = useState(true);
+  const { accountId } = useAuth();
   const [selectedTeam, setSelectedTeam] = useState<TeamInscripcion | null>(null);
   const [searchTerm, setSearchTerm] = useState(() =>
     readUICache<string>("techcup.ui.paymentReport.search", "")
@@ -123,20 +128,86 @@ export function PaymentReport() {
     .reduce((s, i) => s + i.monto, 0);
 
   // Aprobar / Rechazar inscripción
-  const handleReview = (id: number, decision: "Aprobado" | "Rechazado") => {
-    setInscripciones(prev => prev.map(i => {
-      if (i.id !== id) return i;
-      return {
-        ...i,
-        estado: decision,
-        fecha: decision === "Aprobado" ? new Date().toISOString().split("T")[0] : i.fecha,
-      };
-    }));
-    // Actualiza modal si está abierto para el mismo equipo
-    setSelectedTeam(prev =>
-      prev?.id === id ? { ...prev, estado: decision } : prev
-    );
+  const mapStatus = (backend: string): InscripcionEstado => {
+    switch (backend) {
+      case "REVIEW": return "En Revisión";
+      case "APPROVED": return "Aprobado";
+      case "DECLINED": return "Rechazado";
+      case "CANCELLED": return "Cancelado";
+      default: return "En Revisión";
+    }
   };
+
+  const handleReview = async (inscriptionId: number, decision: "Aprobado" | "Rechazado") => {
+    try {
+      if (decision === "Aprobado") {
+        await tournamentService.approveInscription(inscriptionId);
+      } else {
+        await tournamentService.rejectInscription(inscriptionId);
+      }
+      // refresh the list
+      await loadInscripciones();
+    } catch (err) {
+      console.error("Error updating inscription:", err);
+      alert("Error actualizando inscripción en el servidor.");
+    }
+  };
+
+  async function loadInscripciones() {
+    setLoading(true);
+    try {
+      if (!accountId) {
+        setInscripciones([]);
+        return;
+      }
+
+      const tournaments = await tournamentService.listByOrganizer(accountId);
+      const all: TeamInscripcion[] = [];
+
+      // For each tournament, fetch inscriptions and enrich with team/captain data
+      for (const t of tournaments) {
+        const raw = await tournamentService.getTournamentInscriptions(t.id);
+        for (const r of raw) {
+          // try to get team info
+          let teamName = `Equipo ${r.teamId}`;
+          let captainName = `Jugador ${r.captainId}`;
+          try {
+            const team = await teamService.getTeam(r.teamId);
+            teamName = team.name ?? teamName;
+            // captain may be in members
+            const captainMember = (team.members ?? []).find(m => m.playerId === r.captainId || m.memberRole === "capitan");
+            if (captainMember?.name) captainName = captainMember.name;
+          } catch (e) {
+            // ignore, keep ids as fallback
+          }
+
+          const monto = t.costPerTeam ?? 0;
+          const fecha = r.date ? new Date(r.date).toISOString().split("T")[0] : "";
+          const estado = mapStatus(r.status);
+          const comprobanteUrl = r.paymentUrl ?? null;
+          const comprobanteTipo = comprobanteUrl && (comprobanteUrl.endsWith(".pdf") ? "pdf" : "imagen") || null;
+
+          all.push({
+            id: r.id,
+            equipo: teamName,
+            capitan: captainName,
+            monto,
+            estado,
+            fecha,
+            comprobanteUrl,
+            comprobanteTipo,
+          });
+        }
+      }
+
+      setInscripciones(all);
+    } catch (err) {
+      console.error("Error cargando inscripciones:", err);
+      setInscripciones([]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // CSV download
   const handleDownload = () => {
@@ -154,6 +225,11 @@ export function PaymentReport() {
     a.click();
   };
 
+  useEffect(() => {
+    // load inscriptions on mount and when accountId changes
+    loadInscripciones();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
   return (
     <div className="min-h-screen pb-28 lg:pb-8" style={{ backgroundColor: P.bg }}>
 
