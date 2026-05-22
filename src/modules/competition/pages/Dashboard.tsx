@@ -1308,44 +1308,44 @@ export default function Dashboard() {
 
         {/* ── Acciones del equipo ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          <Link to="/player-search">
-            <motion.div
-              whileHover={{ y: -3, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-white rounded-2xl p-4 flex items-center gap-4 cursor-pointer"
-              style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
-            >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${P.secondary}15` }}>
-                <Users style={{ color: P.secondary }} />
-              </div>
-              <div>
-                <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>Buscar jugadores</p>
-                <p style={{ fontSize: "0.75rem", color: P.default }}>Encuentra compañeros para tu equipo</p>
-              </div>
-            </motion.div>
-          </Link>
+          <motion.button
+            type="button"
+            onClick={() => navigate("/player-search")}
+            whileHover={{ y: -3, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-white rounded-2xl p-4 flex items-center gap-4 cursor-pointer text-left w-full"
+            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+          >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${P.secondary}15` }}>
+              <Users style={{ color: P.secondary }} />
+            </div>
+            <div>
+              <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>Buscar jugadores</p>
+              <p style={{ fontSize: "0.75rem", color: P.default }}>Encuentra compañeros para tu equipo</p>
+            </div>
+          </motion.button>
 
-          <Link to="/pending-invitations">
-            <motion.div
-              whileHover={{ y: -3, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-white rounded-2xl p-4 flex items-center gap-4 cursor-pointer relative"
-              style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
-            >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${P.primary}15` }}>
-                <Bell style={{ color: P.primary }} />
-              </div>
-              <div>
-                <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>Invitaciones</p>
-                <p style={{ fontSize: "0.75rem", color: P.default }}>Gestiona solicitudes pendientes</p>
-              </div>
-              {unreadCount > 0 && (
-                <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: P.primary, fontWeight: 700 }}>
-                  {unreadCount}
-                </span>
-              )}
-            </motion.div>
-          </Link>
+          <motion.button
+            type="button"
+            onClick={() => navigate("/pending-invitations")}
+            whileHover={{ y: -3, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-white rounded-2xl p-4 flex items-center gap-4 cursor-pointer relative text-left w-full"
+            style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+          >
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${P.primary}15` }}>
+              <Bell style={{ color: P.primary }} />
+            </div>
+            <div>
+              <p style={{ fontWeight: 700, fontSize: "0.9rem" }}>Invitaciones</p>
+              <p style={{ fontSize: "0.75rem", color: P.default }}>Gestiona solicitudes pendientes</p>
+            </div>
+            {unreadCount > 0 && (
+              <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: P.primary, fontWeight: 700 }}>
+                {unreadCount}
+              </span>
+            )}
+          </motion.button>
         </div>
 
         {/* ── Únete al Torneo ── */}

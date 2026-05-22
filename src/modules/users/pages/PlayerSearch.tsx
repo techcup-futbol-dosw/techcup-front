@@ -1,4 +1,3 @@
-
 // src/modules/users/pages/PlayerSearch.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -29,21 +28,25 @@ const P = {
 };
 
 const positionMeta: Record<string, { label: string; bg: string; color: string }> = {
-  portero:   { label: "Portero",   bg: "rgba(0,102,254,0.10)",   color: "#0066FE" },
-  defensa:   { label: "Defensa",   bg: "rgba(23,201,100,0.10)",  color: "#17C964" },
-  volante:   { label: "Volante",   bg: "rgba(196,132,29,0.12)",  color: "#C4841D" },
-  delantero: { label: "Delantero", bg: "rgba(184,28,28,0.10)",   color: "#B81C1C" },
+  GOALKEEPER: { label: "Portero",   bg: "rgba(0,102,254,0.10)",  color: "#0066FE" },
+  DEFENDER:   { label: "Defensa",   bg: "rgba(23,201,100,0.10)", color: "#17C964" },
+  MIDFIELDER: { label: "Volante",   bg: "rgba(196,132,29,0.12)", color: "#C4841D" },
+  FORWARD:    { label: "Delantero", bg: "rgba(184,28,28,0.10)",  color: "#B81C1C" },
 };
 
 const JUGADORES_MOCK: PlayerDto[] = [
-  { id: 1, nombre: "Carlos Martínez", identificacion: "1234567890", edad: 20, genero: "masculino", posicion: "delantero", semestre: "5", dorsal: 10, disponibilidad: true,  email: "carlos.martinez@universidad.edu" },
-  { id: 2, nombre: "Ana García",       identificacion: "0987654321", edad: 19, genero: "femenino",  posicion: "volante",   semestre: "6", dorsal: 8,  disponibilidad: false, email: "ana.garcia@universidad.edu" },
-  { id: 3, nombre: "Juan Pérez",       identificacion: "1122334455", edad: 21, genero: "masculino", posicion: "defensa",   semestre: "7", dorsal: 4,  disponibilidad: true,  email: "juan.perez@universidad.edu" },
-  { id: 4, nombre: "María López",      identificacion: "5544332211", edad: 18, genero: "femenino",  posicion: "portero",   semestre: "4", dorsal: 1,  disponibilidad: true,  email: "maria.lopez@universidad.edu" },
-  { id: 5, nombre: "Diego Ramírez",    identificacion: "9988776655", edad: 22, genero: "masculino", posicion: "volante",   semestre: "8", dorsal: 6,  disponibilidad: false, email: "diego.ramirez@empresa.com" },
+  { id: 1, fullName: "Carlos Martínez", identification: "1234567890", birthDate: "2004-05-10", gender: "MALE",   semester: 5, status: "ACTIVE", schoolRelation: "STUDENT", academicProgram: "Ingeniería de Sistemas", position: "FORWARD",    dorsalNumber: 10, available: true,  email: "carlos.martinez@universidad.edu" },
+  { id: 2, fullName: "Ana García",       identification: "0987654321", birthDate: "2005-03-22", gender: "FEMALE", semester: 6, status: "ACTIVE", schoolRelation: "STUDENT", academicProgram: "Ingeniería Civil",       position: "MIDFIELDER", dorsalNumber: 8,  available: false, email: "ana.garcia@universidad.edu" },
+  { id: 3, fullName: "Juan Pérez",       identification: "1122334455", birthDate: "2003-11-15", gender: "MALE",   semester: 7, status: "ACTIVE", schoolRelation: "STUDENT", academicProgram: "Ingeniería Eléctrica",   position: "DEFENDER",   dorsalNumber: 4,  available: true,  email: "juan.perez@universidad.edu" },
+  { id: 4, fullName: "María López",      identification: "5544332211", birthDate: "2006-01-08", gender: "FEMALE", semester: 4, status: "ACTIVE", schoolRelation: "STUDENT", academicProgram: "Ingeniería Biomédica",   position: "GOALKEEPER", dorsalNumber: 1,  available: true,  email: "maria.lopez@universidad.edu" },
+  { id: 5, fullName: "Diego Ramírez",    identification: "9988776655", birthDate: "2002-07-30", gender: "MALE",   semester: 8, status: "ACTIVE", schoolRelation: "EMPLOYEE", academicProgram: "Ingeniería Industrial",  position: "MIDFIELDER", dorsalNumber: 6,  available: false, email: "diego.ramirez@empresa.com" },
 ];
 
-function availabilityBorderColor(available: boolean): string {
+function calcAge(birthDate: string): number {
+  return Math.floor((Date.now() - new Date(birthDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+}
+
+function availabilityBorderColor(available: boolean | undefined): string {
   return available ? "#17C964" : "#B81C1C";
 }
 
@@ -67,10 +70,12 @@ function validateIdInput(idStr: string): string | null {
 
 function highlight(text: string, query: string) {
   if (!query.trim()) return <span>{text}</span>;
-  const re = new RegExp(`(${query.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")})`, "ig");
+  const escaped = query.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const re = new RegExp(`(${escaped})`, "i");
+  const parts = text.split(new RegExp(`(${escaped})`, "ig"));
   return (
     <>
-      {text.split(re).map((part, i) =>
+      {parts.map((part, i) =>
         re.test(part) ? (
           <mark key={i} style={{ background: "#FDE68A", color: "#111", padding: "0 2px", borderRadius: 3 }}>
             {part}
@@ -97,9 +102,12 @@ function PlayerCard({
   invited?: boolean;
   canInvite?: boolean;
 }) {
-  const pos = positionMeta[player.posicion] ?? { label: player.posicion, bg: `${P.default}14`, color: P.default };
-  const avail = player.disponibilidad;
-  const borderColor = availabilityBorderColor(avail);
+  const pos = player.position
+    ? (positionMeta[player.position] ?? { label: player.position, bg: `${P.default}14`, color: P.default })
+    : null;
+  const avail = player.available ?? false;
+  const borderColor = availabilityBorderColor(player.available);
+  const age = player.birthDate ? calcAge(player.birthDate) : null;
 
   return (
     <motion.article
@@ -115,13 +123,13 @@ function PlayerCard({
           className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-xl"
           style={{ background: `linear-gradient(135deg, ${P.primary}, ${P.secondary})`, fontWeight: 800 }}
         >
-          {player.dorsal}
+          {player.dorsalNumber ?? "?"}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <h3 className="text-base leading-snug" style={{ fontWeight: 700, color: P.textPrimary }}>
-              {highlight(player.nombre, query)}
+              {highlight(player.fullName, query)}
             </h3>
             <span
               className="text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 flex items-center gap-1"
@@ -136,14 +144,16 @@ function PlayerCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: pos.bg, color: pos.color }}>
-              {pos.label}
-            </span>
-            <span className="text-xs" style={{ color: P.default }}>{player.edad} años</span>
-            {player.semestre && (
+            {pos && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: pos.bg, color: pos.color }}>
+                {pos.label}
+              </span>
+            )}
+            {age !== null && <span className="text-xs" style={{ color: P.default }}>{age} años</span>}
+            {player.semester > 0 && (
               <>
                 <span className="text-xs" style={{ color: P.default }}>·</span>
-                <span className="text-xs" style={{ color: P.default }}>{player.semestre}°</span>
+                <span className="text-xs" style={{ color: P.default }}>{player.semester}°</span>
               </>
             )}
           </div>
@@ -152,7 +162,7 @@ function PlayerCard({
 
       <div className="rounded-xl px-3 py-2.5 space-y-0.5" style={{ backgroundColor: P.bg }}>
         <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>
-          ID: <span style={{ color: P.textPrimary }}>{player.identificacion}</span>
+          ID: <span style={{ color: P.textPrimary }}>{player.identification}</span>
         </p>
         <p className="text-xs truncate" style={{ color: P.default, fontWeight: 600 }}>
           <span style={{ color: P.textPrimary }}>{player.email}</span>
@@ -242,13 +252,16 @@ export default function PlayerSearch() {
     setUsingMock(false);
     try {
       const data = await playerService.search({
-        query:          debouncedName || undefined,
-        posicion:       filters.posicion || undefined,
-        genero:         filters.genero || undefined,
-        semestre:       filters.semestre || undefined,
-        soloDisponibles: filters.onlyAvailable || undefined,
+        name:           debouncedName || undefined,
+        identification: filters.identificacion || undefined,
+        position:       filters.posicion || undefined,
+        gender:         filters.genero || undefined,
+        semester:       filters.semestre || undefined,
+        age:            filters.edad ? Number.parseInt(filters.edad, 10) : undefined,
+        available:      filters.onlyAvailable || undefined,
       });
-      setPlayers(data);
+      const arr = Array.isArray(data) ? data : ((data as unknown as { content?: PlayerDto[] })?.content ?? []);
+      setPlayers(arr);
     } catch {
       setPlayers(JUGADORES_MOCK);
       setUsingMock(true);
@@ -271,18 +284,18 @@ export default function PlayerSearch() {
 
   const results = useMemo(() => {
     const qName = debouncedName.trim().toLowerCase();
-    let r = players.slice();
-    if (qName)                           r = r.filter((p) => p.nombre.toLowerCase().includes(qName));
-    if (filters.identificacion.trim())   r = r.filter((p) => p.identificacion.includes(filters.identificacion.trim()));
-    if (filters.posicion)                r = r.filter((p) => p.posicion === filters.posicion);
+    let r = Array.isArray(players) ? players.slice() : [];
+    if (qName)                           r = r.filter((p) => p.fullName.toLowerCase().includes(qName));
+    if (filters.identificacion.trim())   r = r.filter((p) => p.identification.includes(filters.identificacion.trim()));
+    if (filters.posicion)                r = r.filter((p) => p.position === filters.posicion);
     if (filters.edad) {
       const n = Number.parseInt(filters.edad, 10);
-      if (!Number.isNaN(n))              r = r.filter((p) => p.edad === n);
+      if (!Number.isNaN(n))              r = r.filter((p) => p.birthDate && calcAge(p.birthDate) === n);
     }
-    if (filters.genero)                  r = r.filter((p) => p.genero === filters.genero);
-    if (filters.semestre)                r = r.filter((p) => p.semestre === filters.semestre);
-    if (filters.onlyAvailable)           r = r.filter((p) => p.disponibilidad);
-    r.sort((a, b) => a.nombre.localeCompare(b.nombre));
+    if (filters.genero)                  r = r.filter((p) => p.gender === filters.genero);
+    if (filters.semestre)                r = r.filter((p) => String(p.semester) === filters.semestre);
+    if (filters.onlyAvailable)           r = r.filter((p) => p.available);
+    r.sort((a, b) => a.fullName.localeCompare(b.fullName));
     return r;
   }, [players, debouncedName, filters]);
 
@@ -296,11 +309,13 @@ export default function PlayerSearch() {
   };
 
   const handleInvite = async (id: number) => {
+    const teamId = teamContext?.teamId;
+    if (!teamId) return;
     const p = players.find((x) => x.id === id);
     try {
-      await playerService.invite(id);
+      await playerService.invite(id, teamId);
       setInvited((prev) => new Set([...prev, id]));
-      if (p) setToast(`Invitación enviada a ${p.nombre}`);
+      if (p) setToast(`Invitación enviada a ${p.fullName}`);
     } catch {
       setToast("No se pudo enviar la invitación.");
     }
@@ -409,10 +424,10 @@ export default function PlayerSearch() {
               <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Posición</label>
               <select value={filters.posicion} onChange={(e) => update("posicion", e.target.value)} className="w-full border rounded-xl px-3 py-2.5 outline-none" style={inputStyle}>
                 <option value="">Todas</option>
-                <option value="portero">Portero</option>
-                <option value="defensa">Defensa</option>
-                <option value="volante">Volante</option>
-                <option value="delantero">Delantero</option>
+                <option value="GOALKEEPER">Portero</option>
+                <option value="DEFENDER">Defensa</option>
+                <option value="MIDFIELDER">Volante</option>
+                <option value="FORWARD">Delantero</option>
               </select>
             </div>
 
@@ -477,16 +492,16 @@ export default function PlayerSearch() {
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Género</label>
                     <select value={filters.genero} onChange={(e) => update("genero", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
                       <option value="">Todos</option>
-                      <option value="masculino">Masculino</option>
-                      <option value="femenino">Femenino</option>
-                      <option value="otro">Otro</option>
+                      <option value="MALE">Masculino</option>
+                      <option value="FEMALE">Femenino</option>
+                      <option value="OTHER">Otro</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Semestre</label>
                     <select value={filters.semestre} onChange={(e) => update("semestre", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
                       <option value="">Todos</option>
-                      {Array.from({ length: 8 }, (_, i) => (
+                      {Array.from({ length: 10 }, (_, i) => (
                         <option key={i + 1} value={String(i + 1)}>Semestre {i + 1}</option>
                       ))}
                     </select>
