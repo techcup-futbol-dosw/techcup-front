@@ -27,6 +27,7 @@ import {
   BarChart2,
   GitBranch,
 } from "lucide-react";
+import { statisticsService } from "../services/statisticsService";
 
 // ── Palette ───────────────────────────────────────
 const P = {
@@ -112,12 +113,17 @@ export function TournamentDetail() {
   const [standings, setStandings] = useState<Standing[]>([]);
 
   useEffect(() => {
-    if (!id) return;
-    tournamentService.getById(Number(id))
-      .then((detail) => {
-        setTeams(detail.teams ?? []);
-        setMatches(detail.matches ?? []);
-        setStandings(detail.standings ?? []);
+      if (!id) return;
+      const tournamentId = Number(id);
+
+      Promise.all([
+          tournamentService.getById(tournamentId),
+          statisticsService.getRankedStandings(tournamentId).catch(() => []),
+      ])
+      .then(([detail, standings]) => {
+          setTeams(detail.teams ?? []);
+          setMatches(detail.matches ?? []);
+          setStandings(standings);
       })
       .catch(() => {})
       .finally(() => setLoadingData(false));
