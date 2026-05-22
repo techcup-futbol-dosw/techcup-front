@@ -44,11 +44,10 @@ function buildParams(filters: PlayerSearchFilters): string {
 
 export const playerService = {
     search(filters: PlayerSearchFilters = {}) {
-        const qs = buildParams(filters);
-        return http.get<PlayerDto[]>(`/api/users/search${qs ? `?${qs}` : ""}`);
+        return http.get<PlayerDto[]>(`/players?${buildParams(filters)}`);
     },
 
-    invite(playerId: number | string, teamId: number | string) {
-        return http.post<void>(`/api/invitations/user/${playerId}/team/${teamId}`);
+    invite(playerId: number | string) {
+        return http.post<void>(`/players/${playerId}/invite`);
     },
 };
