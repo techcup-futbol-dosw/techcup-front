@@ -240,7 +240,7 @@ export function OrganizerDashboard() {
   const handleLogout = () => {
     setShowLogout(false);
     sessionStorage.removeItem("userContext");
-    navigate("/login");
+    navigate("/Login"); //I think that its Login instead of login
   };
 
   return (

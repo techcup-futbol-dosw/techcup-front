@@ -8,7 +8,7 @@ import { Link, useNavigate } from "react-router";
 import { useState, useRef, useEffect } from "react";
 import logoTechcup from "@/assets/logo.png";
 import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
-import { loadMatchesIntoCache, loadStandingsIntoCache } from "@/core/services/competitionsService";
+import { loadMatchesIntoCache, loadStandingsIntoCache } from "@/modules/competition/services/competitionsService";
 import { tournamentService } from "@/modules/tournament/services/tournamentService";
 import {
     User,
@@ -1996,4 +1996,3 @@ export function Dashboard() {
         </div>
     );
 }
-

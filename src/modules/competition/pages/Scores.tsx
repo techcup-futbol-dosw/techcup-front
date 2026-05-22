@@ -7,7 +7,7 @@ import { useNavigate } from "react-router";
 import { useState, useEffect } from "react";
 import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { readUICache } from "@/core/utils/uiCache";
-import { loadStandingsIntoCache } from "@/core/services/competitionsService";
+import { loadStandingsIntoCache } from "@/modules/competition/services/competitionsService";
 
 const P = {
   primary: "#B81C1C",

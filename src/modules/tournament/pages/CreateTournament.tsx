@@ -1,10 +1,12 @@
 /**
  * @file src/modules/tournament/pages/CreateTournament.tsx
  */
+
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { tournamentService, type CourtDto } from "../services/tournamentService";
+import { useAuth } from "@/core/auth/AuthContext";
 import {
   ChevronLeft,
   Save,
@@ -65,6 +67,7 @@ class TournamentValidationError extends Error {
 // ── Componente principal ──────────────────────────────────────────────────
 export function CreateTournament() {
   const navigate = useNavigate();
+  const { accountId } = useAuth();
 
   // ── Form state ──
   const [formData, setFormData] = useState<FormData>({
@@ -202,10 +205,7 @@ export function CreateTournament() {
         throw new TournamentValidationError("Selecciona al menos una cancha", "canchasIds");
     } catch (e) { if (e instanceof TournamentValidationError) nextErrors[e.field] = e.message; }
 
-    try {
-      if (!formData.reglamentoPdfUrl)
-        throw new TournamentValidationError("Sube el reglamento del torneo en PDF", "reglamentoPdfUrl");
-    } catch (e) { if (e instanceof TournamentValidationError) nextErrors[e.field] = e.message; }
+    // reglamentoPdfUrl es opcional — no se valida aquí
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -217,6 +217,7 @@ export function CreateTournament() {
 
     try {
       await tournamentService.create({
+        organizerId:           accountId ?? undefined,
         name:                  formData.nombreTorneo.trim(),
         maxTeams:              formData.cantidadEquipos,
         startDate:             formData.fechaInicio,
