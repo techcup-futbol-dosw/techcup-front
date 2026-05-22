@@ -34,11 +34,26 @@ type AdminHeroPanelProps = {
     onLogout: () => void;
 };
 
+const ROLE_TRANSLATIONS: Record<string, string> = {
+    admin: "Administrador",
+    referee: "Árbitro",
+    player: "Jugador",
+    captain: "Capitán",
+    organizer: "Organizador",
+};
+
 function formatLabel(value: string) {
+
+    const key = value.toLowerCase().replace(/_/g, " ");
+    if (ROLE_TRANSLATIONS[key]) return ROLE_TRANSLATIONS[key];
+
+    return key.replace(/\b\w/g, (letter) => letter.toUpperCase());
+    {/*
     return value
         .replace(/_/g, " ")
         .toLowerCase()
         .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    */}
 }
 
 function formatStatus(status: AccountStatus) {
@@ -498,12 +513,18 @@ export function UserManagement() {
                                     className="w-full rounded-2xl border border-black/10 bg-gray-50 py-2.5 px-3 outline-none focus:border-[#C4841D]"
                                 >
                                     <option value="">Todos</option>
-
+                                    <option value="Admin">Administrador</option>
+                                    <option value="Player">Jugador</option>
+                                    <option value="Referee">Árbitro</option>
+                                    <option value="Organizer">Organizador</option>
+                                    <option value="Captain">Capitán</option>
+                                    {/*
                                     {roles.map((role) => (
                                         <option key={role.id} value={role.name}>
                                             {formatLabel(role.name)}
                                         </option>
                                     ))}
+                                    */}
                                 </select>
                             </div>
 
