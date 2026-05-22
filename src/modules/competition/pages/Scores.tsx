@@ -4,8 +4,10 @@
  */
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Trophy, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { readUICache } from "@/core/utils/uiCache";
+import { loadStandingsIntoCache } from "@/modules/competition/services/competitionsService";
 
 const P = {
   primary: "#B81C1C",
@@ -16,11 +18,6 @@ const P = {
   textPrimary: "#1C1C1E",
   bg: "#F2F2F7",
 };
-
-const rankings = readUICache<Array<{ pos: number; team: string; pts: number; pg: number; pe: number; pp: number; gf: number; gc: number; trend: string }>>(
-  "techcup.ui.scores",
-  []
-);
 
 const posConfig: Record<number, { bg: string; text: string; label: string; border: string }> = {
   1: { bg: "#C4841D10", text: "#C4841D", label: "Oro", border: "#C4841D28" },
@@ -48,6 +45,17 @@ function SectionLabel({ text, color }: { text: string; color: string }) {
 
 export function Scores() {
   const navigate = useNavigate();
+  const [rankings, setRankings] = useState<Array<{ pos: number; team: string; pts: number; pg: number; pe: number; pp: number; gf: number; gc: number; trend: string }>>([]);
+
+  useEffect(() => {
+    loadStandingsIntoCache("1")
+      .then(() => {
+        const data = readUICache<typeof rankings>("techcup.ui.scores", []);
+        setRankings(data);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen pb-24 lg:pb-0" style={{ backgroundColor: P.bg }}>
 
@@ -168,7 +176,6 @@ export function Scores() {
           className="bg-white rounded-[20px] overflow-hidden"
           style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
         >
-          {/* Table header */}
           <div
             className="grid items-center px-5 sm:px-6 py-3"
             style={{
@@ -184,7 +191,6 @@ export function Scores() {
             ))}
           </div>
 
-          {/* Rows */}
           {rankings.length === 0 ? (
             <div className="py-12 text-center">
               <Trophy className="w-10 h-10 mx-auto mb-3" style={{ color: P.default, opacity: 0.35 }} />
@@ -240,6 +246,3 @@ export function Scores() {
     </div>
   );
 }
-
-
-
