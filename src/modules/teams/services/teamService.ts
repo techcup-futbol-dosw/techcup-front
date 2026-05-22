@@ -78,6 +78,10 @@ export const teamService = {
         return http.post<MyTeamDto>("/api/teams", payload);
     },
 
+    deleteTeam(teamId: number) {
+        return http.delete<void>(`/api/teams/${teamId}`);
+    },
+
     addMember(teamId: number, payload: AddMemberRequest) {
         return http.post<TeamMemberDto>(`/api/teams/${teamId}/members`, payload, { auth: false });
     },
