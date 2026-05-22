@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate } from "react-router";
 import { LandingPage } from "@/modules/auth/pages/LandingPage";
-import Dashboard from "@/modules/users/pages/Dashboard";
+import { Dashboard } from "@/modules/competition/pages/Dashboard.tsx";
 import { ArbitroDashboard } from "@/modules/teams/pages/ArbitroDashboard";
 import { OrganizerDashboard } from "@/modules/tournament/pages/OrganizerDashboard";
 import { CreateTournament } from "@/modules/tournament/pages/CreateTournament";
@@ -16,6 +16,7 @@ import { SportsProfile } from "@/modules/users/pages/SportsProfile";
 import PlayerSearch from "@/modules/users/pages/PlayerSearch";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
+import PendingInvitations from "@/modules/users/pages/PendingInvitations";
 import { Matches } from "@/modules/competition/pages/Matches";
 import { Schedule } from "@/modules/competition/pages/Schedule";
 import { Scores } from "@/modules/competition/pages/Scores";
@@ -66,6 +67,7 @@ export const router = createBrowserRouter([
           { path: "sport-profile", Component: SportsProfile },
           { path: "profile", Component: Profile },
           { path: "player-search", Component: PlayerSearch },
+          { path: "pending-invitations", Component: PendingInvitations },
           { path: "matches", Component: Matches },
           { path: "schedule", Component: Schedule },
           { path: "scores", Component: Scores },
