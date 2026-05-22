@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
 import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
+import { RELATIONS, PROGRAMS } from "@/core/constants/academicData";
 import {
   ArrowLeft,
   Edit2,
@@ -104,26 +105,48 @@ export function Profile() {
   const { accountId } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("settings");
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
+  // Campos de techchup-users
+  const [fullName, setFullName] = useState("");
+  const [identification, setIdentification] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [gender, setGender] = useState("");
+  const [schoolRelation, setSchoolRelation] = useState("");
+  const [academicProgram, setAcademicProgram] = useState("");
+  const [semester, setSemester] = useState<number | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
 
   useEffect(() => {
     if (!accountId) return;
+    // Identidad: email y bio
     userService.getMe().then((u) => {
-      setFirstName(u.name);
-      setLastName(u.lastName);
       setEmail(u.email);
       setBio(u.bio ?? "");
-      setBioDraft(u.bio ?? "");
+    }).catch(() => {});
+    // techchup-users: perfil extendido
+    userService.getUsersProfile(accountId).then((u) => {
+      setFullName(u.fullName ?? "");
+      setIdentification(u.identification ?? "");
+      setBirthDate(u.birthDate ?? "");
+      setGender(u.gender ?? "");
+      setSchoolRelation(u.schoolRelation ?? "");
+      setAcademicProgram(u.academicProgram ?? "");
+      setSemester(u.semester ?? null);
+      setInfoDraft({
+        fullName: u.fullName ?? "",
+        bio: "",
+        schoolRelation: u.schoolRelation ?? "",
+        academicProgram: u.academicProgram ?? "",
+        semester: u.semester ?? null,
+      });
     }).catch(() => {});
     userService.getActivity().then(setActivityLog).catch(() => {});
   }, [accountId]);
 
-  const [bioDraft, setBioDraft] = useState(bio);
-  const [showBioEditor, setShowBioEditor] = useState(false);
+  type InfoDraft = { fullName: string; bio: string; schoolRelation: string; academicProgram: string; semester: number | null };
+  const [infoDraft, setInfoDraft] = useState<InfoDraft>({ fullName: "", bio: "", schoolRelation: "", academicProgram: "", semester: null });
+  const [showInfoEditor, setShowInfoEditor] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -156,19 +179,31 @@ export function Profile() {
     setTimeout(() => setFeedbackMessage(null), 2400);
   };
 
-  const openBioEditor = () => {
-    setBioDraft(bio);
-    setShowBioEditor(true);
+  const openInfoEditor = () => {
+    setInfoDraft({ fullName, bio, schoolRelation, academicProgram, semester });
+    setShowInfoEditor(true);
   };
 
-  const handleSaveBio = async () => {
+  const handleSaveInfo = async () => {
     try {
-      await userService.updateMe({ bio: bioDraft });
-      setBio(bioDraft);
-      setShowBioEditor(false);
-      showFeedback("Biografía actualizada correctamente.");
+      const isStudent = infoDraft.schoolRelation === "STUDENT";
+      const updated = await userService.updateUsersProfile({
+        fullName: infoDraft.fullName,
+        identification,
+        birthDate,
+        gender,
+        schoolRelation: infoDraft.schoolRelation,
+        academicProgram: isStudent ? infoDraft.academicProgram : "",
+        semester: isStudent ? infoDraft.semester : null,
+      });
+      setFullName(updated.fullName);
+      setSchoolRelation(updated.schoolRelation);
+      setAcademicProgram(updated.academicProgram ?? "");
+      setSemester(updated.semester ?? null);
+      setShowInfoEditor(false);
+      showFeedback("Información actualizada correctamente.");
     } catch {
-      showFeedback("No se pudo guardar la biografía.");
+      showFeedback("No se pudo guardar la información.");
     }
   };
 
@@ -398,7 +433,7 @@ export function Profile() {
                     </div>
                     <button
                       type="button"
-                      onClick={openBioEditor}
+                      onClick={openInfoEditor}
                       className="flex items-center gap-1 flex-shrink-0 -mt-1 transition-colors hover:opacity-80"
                       style={{ fontSize: "0.78rem", fontWeight: 600, color: P.secondary }}
                     >
@@ -408,33 +443,19 @@ export function Profile() {
                   </div>
 
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { id: "profile-first-name", label: "Nombre", value: firstName },
-                        { id: "profile-last-name", label: "Apellido", value: lastName },
-                      ].map((f) => (
-                        <div key={f.id}>
-                          <label htmlFor={f.id} className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                            {f.label}
-                          </label>
-                          <input
-                            id={f.id}
-                            type="text"
-                            value={f.value}
-                            readOnly
-                            disabled
-                            className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200"
-                            style={{
-                              fontSize: "0.88rem",
-                              fontWeight: 500,
-                              backgroundColor: P.bg,
-                              border: "1.5px solid transparent",
-                              color: P.default,
-                              cursor: "not-allowed",
-                            }}
-                          />
-                        </div>
-                      ))}
+                    <div>
+                      <label htmlFor="profile-fullname" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                        Nombre completo
+                      </label>
+                      <input
+                        id="profile-fullname"
+                        type="text"
+                        value={fullName}
+                        readOnly
+                        disabled
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: "1.5px solid transparent", color: P.default, cursor: "not-allowed" }}
+                      />
                     </div>
 
                     <div>
@@ -447,40 +468,75 @@ export function Profile() {
                         value={email}
                         readOnly
                         disabled
-                        className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200"
-                        style={{
-                          fontSize: "0.88rem",
-                          fontWeight: 500,
-                          backgroundColor: P.bg,
-                          border: "1.5px solid transparent",
-                          color: P.default,
-                          cursor: "not-allowed",
-                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: "1.5px solid transparent", color: P.default, cursor: "not-allowed" }}
                       />
                     </div>
 
-                    <div>
-                      <label htmlFor="profile-bio" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                        Biografía
-                      </label>
-                      <textarea
-                        id="profile-bio"
-                        value={bio}
-                        readOnly
-                        disabled
-                        rows={3}
-                        className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200 resize-none"
-                        style={{
-                          fontSize: "0.88rem",
-                          fontWeight: 500,
-                          backgroundColor: P.bg,
-                          border: "1.5px solid transparent",
-                          color: P.textPrimary,
-                          cursor: "not-allowed",
-                          opacity: 0.75,
-                        }}
-                      />
-                    </div>
+                    {schoolRelation && (
+                      <div>
+                        <label className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                          Relación con la Escuela
+                        </label>
+                        <input
+                          type="text"
+                          value={RELATIONS.find((r) => r.value === schoolRelation)?.label ?? schoolRelation}
+                          readOnly
+                          disabled
+                          className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                          style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: "1.5px solid transparent", color: P.default, cursor: "not-allowed" }}
+                        />
+                      </div>
+                    )}
+
+                    {schoolRelation === "STUDENT" && academicProgram && (
+                      <div>
+                        <label className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                          Programa académico
+                        </label>
+                        <input
+                          type="text"
+                          value={PROGRAMS.find((p) => p.value === academicProgram)?.label ?? academicProgram}
+                          readOnly
+                          disabled
+                          className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                          style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: "1.5px solid transparent", color: P.default, cursor: "not-allowed" }}
+                        />
+                      </div>
+                    )}
+
+                    {schoolRelation === "STUDENT" && semester != null && (
+                      <div>
+                        <label className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                          Semestre
+                        </label>
+                        <input
+                          type="text"
+                          value={semester}
+                          readOnly
+                          disabled
+                          className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                          style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: "1.5px solid transparent", color: P.default, cursor: "not-allowed" }}
+                        />
+                      </div>
+                    )}
+
+                    {bio && (
+                      <div>
+                        <label htmlFor="profile-bio" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                          Biografía
+                        </label>
+                        <textarea
+                          id="profile-bio"
+                          value={bio}
+                          readOnly
+                          disabled
+                          rows={3}
+                          className="w-full px-3.5 py-2.5 rounded-xl outline-none resize-none"
+                          style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: "1.5px solid transparent", color: P.textPrimary, cursor: "not-allowed", opacity: 0.75 }}
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -575,54 +631,114 @@ export function Profile() {
         </motion.div>
 
         <AnimatePresence>
-          {showBioEditor && (
-            <ModalShell onClose={() => setShowBioEditor(false)}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
+          {showInfoEditor && (
+            <ModalShell onClose={() => setShowInfoEditor(false)}>
+              <div className="p-6 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-5">
                   <div>
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Editar biografía</h3>
-                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>Actualiza tu descripción pública.</p>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Editar información</h3>
+                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>El correo y la contraseña no se pueden modificar.</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowBioEditor(false)}
+                    onClick={() => setShowInfoEditor(false)}
                     className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
                     style={{ backgroundColor: P.bg }}
-                    aria-label="Cerrar editor de biografía"
+                    aria-label="Cerrar editor"
                   >
                     <X style={{ width: 16, height: 16, color: P.default }} />
                   </button>
                 </div>
-                <textarea
-                  value={bioDraft}
-                  onChange={(e) => setBioDraft(e.target.value)}
-                  rows={5}
-                  className="w-full px-4 py-3 rounded-2xl resize-none outline-none"
-                  style={{
-                    fontSize: "0.9rem",
-                    fontWeight: 500,
-                    color: P.textPrimary,
-                    backgroundColor: P.bg,
-                    border: `1.5px solid ${P.secondary}20`,
-                  }}
-                  aria-label="Contenido de biografía"
-                />
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="edit-fullname" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                      Nombre completo
+                    </label>
+                    <input
+                      id="edit-fullname"
+                      type="text"
+                      value={infoDraft.fullName}
+                      onChange={(e) => setInfoDraft((d) => ({ ...d, fullName: e.target.value }))}
+                      className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                      style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}30`, color: P.textPrimary }}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="edit-relation" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                      Relación con la Escuela
+                    </label>
+                    <select
+                      id="edit-relation"
+                      value={infoDraft.schoolRelation}
+                      onChange={(e) => setInfoDraft((d) => ({ ...d, schoolRelation: e.target.value, semester: e.target.value !== "STUDENT" ? null : d.semester, academicProgram: e.target.value !== "STUDENT" ? "" : d.academicProgram }))}
+                      className="w-full px-3.5 py-2.5 rounded-xl outline-none appearance-none"
+                      style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}30`, color: P.textPrimary }}
+                    >
+                      <option value="">Seleccionar...</option>
+                      {RELATIONS.map((r) => (
+                        <option key={r.value} value={r.value}>{r.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {infoDraft.schoolRelation === "STUDENT" && (
+                    <div>
+                      <label htmlFor="edit-program" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                        Programa académico
+                      </label>
+                      <select
+                        id="edit-program"
+                        value={infoDraft.academicProgram}
+                        onChange={(e) => setInfoDraft((d) => ({ ...d, academicProgram: e.target.value }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none appearance-none"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}30`, color: P.textPrimary }}
+                      >
+                        <option value="">Seleccionar...</option>
+                        {PROGRAMS.map((p) => (
+                          <option key={p.value} value={p.value}>{p.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {infoDraft.schoolRelation === "STUDENT" && (
+                    <div>
+                      <label htmlFor="edit-semester" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                        Semestre
+                      </label>
+                      <input
+                        id="edit-semester"
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={infoDraft.semester ?? ""}
+                        onChange={(e) => setInfoDraft((d) => ({ ...d, semester: e.target.value ? Number(e.target.value) : null }))}
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}30`, color: P.textPrimary }}
+                      />
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex justify-end gap-3 mt-5">
                   <button
                     type="button"
-                    onClick={() => setShowBioEditor(false)}
+                    onClick={() => setShowInfoEditor(false)}
                     className="px-4 py-2.5 rounded-xl transition-opacity hover:opacity-80"
                     style={{ backgroundColor: P.bg, color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
                   >
-                    Cerrar
+                    Cancelar
                   </button>
                   <button
                     type="button"
-                    onClick={handleSaveBio}
-                    className="px-4 py-2.5 rounded-xl text-white transition-transform hover:scale-105 active:scale-95"
+                    onClick={handleSaveInfo}
+                    className="px-4 py-2.5 rounded-xl text-white flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
                     style={{ backgroundColor: P.secondary, fontWeight: 700, fontSize: "0.82rem" }}
                   >
-                    Guardar bio
+                    <Save style={{ width: 14, height: 14 }} />
+                    Guardar
                   </button>
                 </div>
               </div>

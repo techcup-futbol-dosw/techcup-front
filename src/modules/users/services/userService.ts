@@ -1,5 +1,6 @@
 import { http } from "@/core/api/http";
 
+// Respuesta del servicio de identidad (/accounts/me)
 export type UserProfileDto = {
     id: number;
     name: string;
@@ -17,10 +18,31 @@ export type UserProfileDto = {
     roles: string[];
 };
 
-export type UpdateProfileRequest = {
-    name?: string;
-    lastName?: string;
-    bio?: string;
+// Respuesta de techchup-users (/api/users/{id})
+export type UsersProfileDto = {
+    id: number;
+    fullName: string;
+    email: string;
+    identification: string;
+    birthDate: string;
+    gender: string;
+    schoolRelation: string;
+    academicProgram: string;
+    semester: number | null;
+    status: string;
+    profileCreatedAt: string;
+    updatedAt: string;
+};
+
+// Payload para PUT /api/users/me (techchup-users)
+export type UpdateUsersProfileRequest = {
+    fullName: string;
+    identification: string;
+    birthDate: string;
+    gender: string;
+    schoolRelation: string;
+    academicProgram: string;
+    semester: number | null;
 };
 
 export type ChangePasswordRequest = {
@@ -36,12 +58,18 @@ export type ActivityItemDto = {
 };
 
 export const userService = {
+    // Servicio de identidad — email, nombre básico, roles
     getMe() {
         return http.get<UserProfileDto>("/accounts/me");
     },
 
-    updateMe(payload: UpdateProfileRequest) {
-        return http.patch<UserProfileDto>("/accounts/me", payload);
+    // techchup-users — perfil extendido (relación, programa, semestre)
+    getUsersProfile(id: number) {
+        return http.get<UsersProfileDto>(`/api/users/${id}`);
+    },
+
+    updateUsersProfile(payload: UpdateUsersProfileRequest) {
+        return http.put<UsersProfileDto>("/api/users/me", payload);
     },
 
     changePassword(payload: ChangePasswordRequest) {
