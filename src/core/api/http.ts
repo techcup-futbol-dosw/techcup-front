@@ -27,7 +27,7 @@ async function attemptTokenRefresh(): Promise<boolean> {
     if (!refreshToken) return false;
 
     try {
-        const res = await fetch(`${env.apiBaseUrl}/auth/refresh`, {
+        const res = await fetch(`https://techchup-apigateway-evajc4dzaagbf4dd.brazilsouth-01.azurewebsites.net/auth/refresh`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ refreshToken }),
