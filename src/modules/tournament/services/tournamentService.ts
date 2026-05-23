@@ -287,19 +287,8 @@ export const tournamentService = {
     uploadRegulation: async (file: File): Promise<{ url: string; fileName: string }> => {
     const formData = new FormData();
     formData.append("file", file);
-    const token = tokenStorage.getAccessToken();
-    try {
-        const response = await http.post<{ data: UploadResponse }>(
-        "/api/tournaments/regulation/upload",
-        formData,
-        {
-            headers: {
-            "Content-Type": "multipart/form-data",
-            "Authorization": `Bearer ${token}`
-            },
-        }
-        );
-        return response.data;
+    try {   
+        return http.post<{ url: string; fileName: string }>("/api/tournaments/regulation/upload", formData);
     } catch (error: any) {
         console.error("Error subiendo PDF:", error?.response?.data || error);
         throw error;
