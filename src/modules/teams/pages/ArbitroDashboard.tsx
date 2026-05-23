@@ -109,7 +109,7 @@ const statusConfig: Record<MatchStatus, { label: string; color: string; glassCol
 // ── ArbitroDashboard ──────────────────────────────
 export function ArbitroDashboard() {
   const navigate = useNavigate();
-  const { logout, accountId } = useAuth();
+  const { logout } = useAuth();
   const [showLogout, setShowLogout] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -119,12 +119,11 @@ export function ArbitroDashboard() {
   const [loadingMatches, setLoadingMatches] = useState(true);
 
   useEffect(() => {
-    if (!accountId) return;
-    matchService.getByReferee(accountId)
+    matchService.getAssigned()
       .then(setAllMatches)
       .catch(() => setAllMatches([]))
       .finally(() => setLoadingMatches(false));
-  }, [accountId]);
+  }, []);
 
   const todayStr = new Date().toISOString().split("T")[0];
   const todayMatches = allMatches.filter((m) => m.date === todayStr);
