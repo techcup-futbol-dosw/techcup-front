@@ -145,20 +145,40 @@ export function CreateTournament() {
   };
 
   // ── Subida de PDF al API Gateway ──────────────────────────────────────
-  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingPdf(true);
     setPdfFileName(file.name);
-    if (errors.reglamentoPdfUrl) setErrors((p) => ({ ...p, reglamentoPdfUrl: "" }));
+    if (errors.reglamentoPdfUrl) {
+        setErrors((p) => ({
+            ...p,
+            reglamentoPdfUrl: ""
+        }));
+    }
     try {
-      const { url } = await tournamentService.uploadRegulation(file);
-      setFormData((prev) => ({ ...prev, reglamentoPdfUrl: url }));
-    } catch {
-      setErrors((p) => ({ ...p, reglamentoPdfUrl: "Error al subir el PDF. Intenta de nuevo." }));
-      setPdfFileName(null);
+        console.log("Subiendo archivo:", file.name);
+        const response =
+            await tournamentService.uploadRegulation(file);
+        console.log("Respuesta backend:", response);
+        setFormData((prev) => ({
+            ...prev,
+            reglamentoPdfUrl: response.url
+        }));
+    } catch (error: any) {
+        console.error(
+            "Error PDF:",
+            error?.response?.data || error
+        );
+        setErrors((p) => ({
+            ...p,
+            reglamentoPdfUrl:
+                "Error al subir el PDF. Intenta de nuevo."
+        }));
+        setPdfFileName(null);
     } finally {
-      setUploadingPdf(false);
+        setUploadingPdf(false);
     }
   };
 
