@@ -1,12 +1,8 @@
-import { motion, AnimatePresence } from "motion/react";
-import { Link, useNavigate } from "react-router";
+﻿import { motion, AnimatePresence } from "motion/react";
+import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
 import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
-import { sportProfileService, type SportProfileResponse } from "@/modules/users/services/sportProfileService";
-import { RELATIONS, PROGRAMS } from "@/core/constants/academicData";
-import { tokenStorage } from "@/core/auth/tokenStorage";
-import { env } from "@/core/config/env";
 import {
   ArrowLeft,
   Edit2,
@@ -17,6 +13,7 @@ import {
   User,
   X,
   Save,
+  AlertCircle,
 } from "lucide-react";
 
 const P = {
@@ -30,28 +27,6 @@ const P = {
 };
 
 type Tab = "overview" | "settings" | "activity";
-
-const POSITION_LABELS: Record<string, string> = {
-  GOALKEEPER: "Portero",
-  DEFENDER: "Defensa",
-  MIDFIELDER: "Volante",
-  FORWARD: "Delantero",
-};
-
-async function loadSportProfilePhoto(photoId: string): Promise<string | null> {
-  const token = tokenStorage.getAccessToken();
-  if (!token) return null;
-  try {
-    const res = await fetch(`${env.apiBaseUrl}/api/sport-profiles/photos/${photoId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
-}
 
 function SectionLabel({ text, color }: { text: string; color: string }) {
   return (
@@ -102,95 +77,59 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
   );
 }
 
+// Helper: Determinar dashboard path
 const getDashboardPath = (context: string): string => {
   if (context === "organizer") return "/dashboard-organizer";
   if (context === "arbitro") return "/dashboard-arbitro";
   return "/dashboard";
 };
 
+// Helper: Determinar color por contexto
 const getBadgeColor = (context: string): string => {
   if (context === "organizer") return P.success;
   if (context === "arbitro") return P.secondary;
   return P.primary;
 };
 
+// Helper: Determinar label por contexto
 const getBadgeLabel = (context: string): string => {
   if (context === "organizer") return "Organizador";
   if (context === "arbitro") return "Árbitro";
   return "Usuario";
 };
 
-type InfoDraft = {
-  fullName: string;
-  schoolRelation: string;
-  academicProgram: string;
-  semester: number | null;
-};
 
 export function Profile() {
   const navigate = useNavigate();
   const { accountId } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("settings");
 
-  // Identity service data
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [createdAt, setCreatedAt] = useState<string>("");
-
-  // techchup-users data
-  const [fullName, setFullName] = useState("");
-  const [identification, setIdentification] = useState("");
-  const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState("");
-  const [schoolRelation, setSchoolRelation] = useState("");
-  const [academicProgram, setAcademicProgram] = useState("");
-  const [semester, setSemester] = useState<number | null>(null);
-
-  // Sport profile data
-  const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
-
+  const [bio, setBio] = useState("");
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
 
   useEffect(() => {
     if (!accountId) return;
-
-    userService.getMe(accountId!).then((u) => {
+    userService.getMe().then((u) => {
+      setFirstName(u.name);
+      setLastName(u.lastName);
       setEmail(u.email);
-      setCreatedAt(u.createdAt ?? "");
+      setBio(u.bio ?? "");
+      setBioDraft(u.bio ?? "");
     }).catch(() => {});
-
-    userService.getUsersProfile(accountId).then((p) => {
-      setFullName(p.fullName);
-      setIdentification(p.identification);
-      setBirthDate(p.birthDate);
-      setGender(p.gender);
-      setSchoolRelation(p.schoolRelation);
-      setAcademicProgram(p.academicProgram);
-      setSemester(p.semester);
-    }).catch(() => {});
-
     userService.getActivity().then(setActivityLog).catch(() => {});
-
-    sportProfileService.getByUserId(accountId).then(async (sp) => {
-      setSportProfile(sp);
-      if (sp.photoId) {
-        const url = await loadSportProfilePhoto(sp.photoId);
-        if (url) setProfilePhotoUrl(url);
-      }
-    }).catch(() => {});
   }, [accountId]);
 
-  useEffect(() => {
-    return () => {
-      if (profilePhotoUrl) URL.revokeObjectURL(profilePhotoUrl);
-    };
-  }, [profilePhotoUrl]);
-
-  // Info editor state
-  const [infoDraft, setInfoDraft] = useState<InfoDraft>({ fullName: "", schoolRelation: "", academicProgram: "", semester: null });
-  const [showInfoEditor, setShowInfoEditor] = useState(false);
-
+  const [bioDraft, setBioDraft] = useState(bio);
+  const [showBioEditor, setShowBioEditor] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const activityRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -199,68 +138,101 @@ export function Profile() {
 
   useEffect(() => {
     const context = sessionStorage.getItem("userContext");
-    if (context) setUserContext(context);
+    if (context) {
+      setUserContext(context);
+    }
   }, []);
 
   const dashboardPath = getDashboardPath(userContext);
   const badgeColor = getBadgeColor(userContext);
   const badgeLabel = getBadgeLabel(userContext);
 
+  const handleBack = () => {
+    navigate(dashboardPath);
+  };
+
   const showFeedback = (message: string) => {
     setFeedbackMessage(message);
     setTimeout(() => setFeedbackMessage(null), 2400);
   };
 
-  const openInfoEditor = () => {
-    setInfoDraft({ fullName, schoolRelation, academicProgram, semester });
-    setShowInfoEditor(true);
+  const openBioEditor = () => {
+    setBioDraft(bio);
+    setShowBioEditor(true);
   };
 
-  const handleSaveInfo = async () => {
+  const handleSaveBio = async () => {
     try {
-      const updated = await userService.updateUsersProfile({
-        fullName: infoDraft.fullName,
-        identification,
-        birthDate,
-        gender,
-        schoolRelation: infoDraft.schoolRelation,
-        academicProgram: infoDraft.academicProgram,
-        semester: infoDraft.schoolRelation === "STUDENT" ? infoDraft.semester : null,
-      });
-      setFullName(updated.fullName);
-      setSchoolRelation(updated.schoolRelation);
-      setAcademicProgram(updated.academicProgram);
-      setSemester(updated.semester);
-      setShowInfoEditor(false);
-      showFeedback("Información actualizada correctamente.");
+      await userService.updateMe({ bio: bioDraft });
+      setBio(bioDraft);
+      setShowBioEditor(false);
+      showFeedback("Biografía actualizada correctamente.");
     } catch {
-      showFeedback("No se pudo guardar la información.");
+      showFeedback("No se pudo guardar la biografía.");
     }
   };
 
+  const handleSavePassword = async () => {
+    if (!currentPassword.trim()) {
+      setPasswordError("Ingresa la contraseña actual.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("La nueva contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("La nueva contraseña y su confirmación no coinciden.");
+      return;
+    }
+    try {
+      await userService.changePassword({ currentPassword, newPassword });
+      setShowPasswordModal(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordError("");
+      showFeedback("Contraseña actualizada correctamente.");
+    } catch {
+      setPasswordError("Contraseña actual incorrecta.");
+    }
+  };
+
+  // Handlers para elemento interactivo de actividad
   const handleActivityMouseEnter = (id: string) => {
-    const el = activityRefs.current[id];
-    if (el) el.style.backgroundColor = P.bg;
+    const element = activityRefs.current[id];
+    if (element) {
+      element.style.backgroundColor = P.bg;
+    }
   };
+
   const handleActivityMouseLeave = (id: string) => {
-    const el = activityRefs.current[id];
-    if (el) el.style.backgroundColor = "transparent";
+    const element = activityRefs.current[id];
+    if (element) {
+      element.style.backgroundColor = "transparent";
+    }
   };
+
   const handleActivityKeyDown = (e: React.KeyboardEvent, id: string) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       setActiveActivityId(activeActivityId === id ? null : id);
     }
   };
-  const handleActivityTouchStart = (id: string) => handleActivityMouseEnter(id);
-  const handleActivityTouchEnd   = (id: string) => setTimeout(() => handleActivityMouseLeave(id), 200);
 
-  const relationLabel = RELATIONS.find((r) => r.value === schoolRelation)?.label ?? schoolRelation;
-  const programLabel  = PROGRAMS.find((p) => p.value === academicProgram)?.label ?? academicProgram;
+  const handleActivityTouchStart = (id: string) => {
+    handleActivityMouseEnter(id);
+  };
+
+  const handleActivityTouchEnd = (id: string) => {
+    setTimeout(() => {
+      handleActivityMouseLeave(id);
+    }, 200);
+  };
 
   const tabs: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
-    { id: "overview", label: "Resumen",   icon: LayoutGrid },
-    { id: "settings", label: "Ajustes",   icon: Settings },
+    { id: "overview", label: "Resumen", icon: LayoutGrid },
+    { id: "settings", label: "Ajustes", icon: Settings },
     { id: "activity", label: "Actividad", icon: Activity },
   ];
 
@@ -281,7 +253,7 @@ export function Profile() {
         <div className="max-w-3xl mx-auto flex items-center gap-3 h-[60px]">
           <button
             type="button"
-            onClick={() => navigate(dashboardPath)}
+            onClick={handleBack}
             className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
             style={{ backgroundColor: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
             aria-label="Volver al dashboard"
@@ -299,7 +271,6 @@ export function Profile() {
       </motion.header>
 
       <main className="max-w-3xl mx-auto px-6 sm:px-10 pt-10 pb-16 space-y-6">
-        {/* Profile card */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -309,64 +280,37 @@ export function Profile() {
         >
           <div className="flex items-start gap-4">
             <div className="relative flex-shrink-0">
-              {profilePhotoUrl ? (
-                <img
-                  src={profilePhotoUrl}
-                  alt={fullName}
-                  className="w-16 h-16 rounded-2xl object-cover"
-                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
-                />
-              ) : (
-                <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: `${P.primary}14`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)" }}
-                >
-                  {fullName ? (
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: P.primary }}>
-                      {fullName.charAt(0).toUpperCase()}
-                    </span>
-                  ) : (
-                    <User style={{ width: 28, height: 28, color: P.primary }} />
-                  )}
-                </div>
-              )}
-              {sportProfile?.available && (
-                <div
-                  className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
-                  style={{ backgroundColor: P.success }}
-                />
-              )}
+              <img
+                src="https://images.unsplash.com/photo-1759701546662-b79f5d881124?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMG1hbiUyMGF0aGxldGUlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwxfHx8fDE3NzI2MzUxNDB8MA&ixlib=rb-4.1.0&q=80&w=400"
+                alt="Alex Rivers"
+                className="w-16 h-16 rounded-2xl object-cover"
+                style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
+              />
+              <div
+                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
+                style={{ backgroundColor: P.success }}
+              />
             </div>
 
             <div className="flex-1 min-w-0">
               <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: P.textPrimary, letterSpacing: "-0.02em" }}>
-                {fullName || "Cargando..."}
+                Alex Rivers
               </h2>
               <p className="mt-0.5" style={{ fontSize: "0.82rem", color: P.default, fontWeight: 500 }}>
-                {email}
+                alex.rivers@techcup.io
               </p>
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {sportProfile?.position && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                    {POSITION_LABELS[sportProfile.position]}
-                  </span>
-                )}
-                {sportProfile?.dorsalNumber != null && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                    #{String(sportProfile.dorsalNumber).padStart(2, "0")}
-                  </span>
-                )}
-                {!sportProfile && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.default}14`, color: P.default, fontWeight: 600, letterSpacing: "0.05em" }}>
-                    Sin perfil deportivo
-                  </span>
-                )}
+                <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                  PRO ATHLETE
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                  TECHLEAD ELITE
+                </span>
               </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Tabs */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -384,7 +328,11 @@ export function Profile() {
                   onClick={() => setActiveTab(tab.id)}
                   type="button"
                   className="flex-1 flex items-center justify-center gap-2 py-3.5 relative transition-all duration-200"
-                  style={{ fontWeight: isActive ? 700 : 500, color: isActive ? P.textPrimary : P.default, fontSize: "0.82rem" }}
+                  style={{
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? P.textPrimary : P.default,
+                    fontSize: "0.82rem",
+                  }}
                 >
                   <Icon style={{ width: 15, height: 15 }} />
                   {tab.label}
@@ -401,7 +349,6 @@ export function Profile() {
           </div>
 
           <AnimatePresence mode="wait">
-            {/* ── Overview ── */}
             {activeTab === "overview" && (
               <motion.div
                 key="overview"
@@ -411,53 +358,29 @@ export function Profile() {
                 transition={{ duration: 0.22 }}
                 className="p-6"
               >
-                <SectionLabel text="Perfil Deportivo" color={P.primary} />
-                {sportProfile ? (
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <p style={{ fontSize: "1.1rem", fontWeight: 800, color: P.secondary, letterSpacing: "-0.02em" }}>
-                        {sportProfile.position ? POSITION_LABELS[sportProfile.position] : "—"}
+                <SectionLabel text="Estadísticas" color={P.primary} />
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  {[
+                    { id: "stat-1", label: "Partidos Jugados", value: "42", color: P.primary },
+                    { id: "stat-2", label: "Victorias", value: "28", color: P.success },
+                    { id: "stat-3", label: "Torneos", value: "8", color: P.secondary },
+                    { id: "stat-4", label: "Puntos Totales", value: "2,450", color: P.info },
+                  ].map((s) => (
+                    <div key={s.id} className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: s.color, letterSpacing: "-0.02em" }}>
+                        {s.value}
                       </p>
-                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Posición</p>
-                    </div>
-                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: P.primary, letterSpacing: "-0.02em" }}>
-                        {sportProfile.dorsalNumber != null ? String(sportProfile.dorsalNumber).padStart(2, "0") : "—"}
+                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>
+                        {s.label}
                       </p>
-                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Dorsal</p>
                     </div>
-                    <div className="col-span-2 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <div>
-                        <p style={{ fontSize: "0.88rem", fontWeight: 700, color: sportProfile.available ? P.success : P.default }}>
-                          {sportProfile.available ? "Disponible para jugar" : "No disponible"}
-                        </p>
-                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Estado de disponibilidad</p>
-                      </div>
-                      <Link
-                        to="/sport-profile"
-                        className="px-3 py-1.5 rounded-xl text-xs"
-                        style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
-                      >
-                        Editar
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-6 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                    <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>Sin perfil deportivo configurado.</p>
-                    <Link
-                      to="/sport-profile"
-                      className="px-3 py-1.5 rounded-xl text-xs"
-                      style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
-                    >
-                      Completar
-                    </Link>
-                  </div>
-                )}
+                  ))}
+                </div>
+                <SectionLabel text="Biografía" color={P.default} />
+                <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio}</p>
               </motion.div>
             )}
 
-            {/* ── Settings ── */}
             {activeTab === "settings" && (
               <motion.div
                 key="settings"
@@ -468,13 +391,14 @@ export function Profile() {
                 className="divide-y"
                 style={{ "--tw-divide-opacity": 1, borderColor: "rgba(0,0,0,0.05)" } as React.CSSProperties}
               >
-                {/* Información Personal */}
                 <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                   <div className="flex items-start justify-between mb-5">
-                    <SectionLabel text="Información Personal" color={P.secondary} />
+                    <div>
+                      <SectionLabel text="Información Personal" color={P.secondary} />
+                    </div>
                     <button
                       type="button"
-                      onClick={openInfoEditor}
+                      onClick={openBioEditor}
                       className="flex items-center gap-1 flex-shrink-0 -mt-1 transition-colors hover:opacity-80"
                       style={{ fontSize: "0.78rem", fontWeight: 600, color: P.secondary }}
                     >
@@ -482,70 +406,124 @@ export function Profile() {
                       Editar
                     </button>
                   </div>
+
                   <div className="space-y-4">
-                    <div>
-                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Nombre completo</p>
-                      <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
-                        {fullName || "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Correo electrónico</p>
-                      <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.default }}>
-                        {email || "—"}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Relación con la Escuela</p>
-                      <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
-                        {relationLabel || "—"}
-                      </div>
-                    </div>
-                    {schoolRelation === "STUDENT" && (
-                      <>
-                        <div>
-                          <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Programa académico</p>
-                          <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
-                            {programLabel || "—"}
-                          </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { id: "profile-first-name", label: "Nombre", value: firstName },
+                        { id: "profile-last-name", label: "Apellido", value: lastName },
+                      ].map((f) => (
+                        <div key={f.id}>
+                          <label htmlFor={f.id} className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                            {f.label}
+                          </label>
+                          <input
+                            id={f.id}
+                            type="text"
+                            value={f.value}
+                            readOnly
+                            disabled
+                            className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200"
+                            style={{
+                              fontSize: "0.88rem",
+                              fontWeight: 500,
+                              backgroundColor: P.bg,
+                              border: "1.5px solid transparent",
+                              color: P.default,
+                              cursor: "not-allowed",
+                            }}
+                          />
                         </div>
-                        <div>
-                          <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Semestre</p>
-                          <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
-                            {semester ?? "—"}
-                          </div>
-                        </div>
-                      </>
-                    )}
+                      ))}
+                    </div>
+
+                    <div>
+                      <label htmlFor="profile-email" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                        Correo electrónico
+                      </label>
+                      <input
+                        id="profile-email"
+                        type="email"
+                        value={email}
+                        readOnly
+                        disabled
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200"
+                        style={{
+                          fontSize: "0.88rem",
+                          fontWeight: 500,
+                          backgroundColor: P.bg,
+                          border: "1.5px solid transparent",
+                          color: P.default,
+                          cursor: "not-allowed",
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="profile-bio" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
+                        Biografía
+                      </label>
+                      <textarea
+                        id="profile-bio"
+                        value={bio}
+                        readOnly
+                        disabled
+                        rows={3}
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200 resize-none"
+                        style={{
+                          fontSize: "0.88rem",
+                          fontWeight: 500,
+                          backgroundColor: P.bg,
+                          border: "1.5px solid transparent",
+                          color: P.textPrimary,
+                          cursor: "not-allowed",
+                          opacity: 0.75,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* Seguridad */}
                 <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                  <div className="mb-5">
+                  <div className="flex items-start justify-between mb-5">
                     <SectionLabel text="Seguridad y Acceso" color={P.info} />
                   </div>
-                  <div
-                    className="flex items-center gap-3 p-3.5 rounded-2xl"
-                    style={{ backgroundColor: P.bg }}
-                  >
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${P.info}12` }}>
-                      <KeyRound style={{ width: 16, height: 16, color: P.info }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>Contraseña</p>
-                      {createdAt && (
-                        <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>
-                          Cuenta desde {new Date(createdAt).toLocaleDateString("es-CO", { year: "numeric", month: "long" })}
-                        </p>
-                      )}
-                    </div>
+                  <div className="space-y-3">
+                    {[
+                      { id: "sec-pass", icon: KeyRound, label: "Contraseña", sub: "Actualizada hace 3 meses", color: P.info, action: "Cambiar" },
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 p-3.5 rounded-2xl"
+                          style={{ backgroundColor: P.bg }}
+                        >
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${item.color}12` }}>
+                            <Icon style={{ width: 16, height: 16, color: item.color }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.label}</p>
+                            <p style={{ fontSize: "0.75rem", color: item.color === P.success ? item.color : P.default, fontWeight: 500 }}>
+                              {item.sub}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowPasswordModal(true)}
+                            className="px-3 py-1.5 rounded-xl bg-white flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+                            style={{ fontSize: "0.75rem", fontWeight: 600, color: P.textPrimary, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+                          >
+                            {item.action}
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </motion.div>
             )}
 
-            {/* ── Activity ── */}
             {activeTab === "activity" && (
               <motion.div
                 key="activity"
@@ -564,30 +542,30 @@ export function Profile() {
                     const key = String(item.id);
                     const dotColor = ACTIVITY_COLOR[item.category] ?? P.default;
                     return (
-                      <motion.div
-                        key={key}
-                        ref={(el) => { if (el) activityRefs.current[key] = el; }}
-                        role="button"
-                        tabIndex={0}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.07 }}
-                        className="flex items-start gap-3 p-3.5 rounded-2xl transition-colors duration-200 cursor-pointer"
-                        style={{ backgroundColor: "transparent" }}
-                        onMouseEnter={() => handleActivityMouseEnter(key)}
-                        onMouseLeave={() => handleActivityMouseLeave(key)}
-                        onKeyDown={(e) => handleActivityKeyDown(e, key)}
-                        onTouchStart={() => handleActivityTouchStart(key)}
-                        onTouchEnd={() => handleActivityTouchEnd(key)}
-                        aria-label={`Actividad: ${item.action}, ${item.createdAt}`}
-                        aria-pressed={activeActivityId === key}
-                      >
-                        <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: dotColor }} />
-                        <div className="flex-1 min-w-0">
-                          <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.action}</p>
-                          <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>{item.createdAt}</p>
-                        </div>
-                      </motion.div>
+                    <motion.div
+                      key={key}
+                      ref={(el) => { if (el) activityRefs.current[key] = el; }}
+                      role="button"
+                      tabIndex={0}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.07 }}
+                      className="flex items-start gap-3 p-3.5 rounded-2xl transition-colors duration-200 cursor-pointer"
+                      style={{ backgroundColor: "transparent" }}
+                      onMouseEnter={() => handleActivityMouseEnter(key)}
+                      onMouseLeave={() => handleActivityMouseLeave(key)}
+                      onKeyDown={(e) => handleActivityKeyDown(e, key)}
+                      onTouchStart={() => handleActivityTouchStart(key)}
+                      onTouchEnd={() => handleActivityTouchEnd(key)}
+                      aria-label={`Actividad: ${item.action}, ${item.createdAt}`}
+                      aria-pressed={activeActivityId === key}
+                    >
+                      <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: dotColor }} />
+                      <div className="flex-1 min-w-0">
+                        <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.action}</p>
+                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>{item.createdAt}</p>
+                      </div>
+                    </motion.div>
                     );
                   })}
                 </div>
@@ -596,105 +574,43 @@ export function Profile() {
           </AnimatePresence>
         </motion.div>
 
-        {/* Modal: editar información personal */}
         <AnimatePresence>
-          {showInfoEditor && (
-            <ModalShell onClose={() => setShowInfoEditor(false)}>
+          {showBioEditor && (
+            <ModalShell onClose={() => setShowBioEditor(false)}>
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Editar información</h3>
-                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>El correo no se puede modificar.</p>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Editar biografía</h3>
+                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>Actualiza tu descripción pública.</p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowInfoEditor(false)}
+                    onClick={() => setShowBioEditor(false)}
                     className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
                     style={{ backgroundColor: P.bg }}
-                    aria-label="Cerrar editor"
+                    aria-label="Cerrar editor de biografía"
                   >
                     <X style={{ width: 16, height: 16, color: P.default }} />
                   </button>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <label htmlFor="edit-fullname" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
-                      Nombre completo
-                    </label>
-                    <input
-                      id="edit-fullname"
-                      type="text"
-                      value={infoDraft.fullName}
-                      onChange={(e) => setInfoDraft((d) => ({ ...d, fullName: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl outline-none"
-                      style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: `1.5px solid ${P.secondary}30` }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="edit-relation" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
-                      Relación con la Escuela
-                    </label>
-                    <select
-                      id="edit-relation"
-                      value={infoDraft.schoolRelation}
-                      onChange={(e) => setInfoDraft((d) => ({
-                        ...d,
-                        schoolRelation: e.target.value,
-                        semester: e.target.value !== "STUDENT" ? null : d.semester,
-                      }))}
-                      className="w-full px-4 py-3 rounded-xl outline-none"
-                      style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: `1.5px solid ${P.secondary}30` }}
-                    >
-                      <option value="">Selecciona...</option>
-                      {RELATIONS.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {infoDraft.schoolRelation === "STUDENT" && (
-                    <>
-                      <div>
-                        <label htmlFor="edit-program" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
-                          Programa académico
-                        </label>
-                        <select
-                          id="edit-program"
-                          value={infoDraft.academicProgram}
-                          onChange={(e) => setInfoDraft((d) => ({ ...d, academicProgram: e.target.value }))}
-                          className="w-full px-4 py-3 rounded-xl outline-none"
-                          style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: `1.5px solid ${P.secondary}30` }}
-                        >
-                          <option value="">Selecciona...</option>
-                          {PROGRAMS.map((p) => (
-                            <option key={p.value} value={p.value}>{p.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="edit-semester" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
-                          Semestre
-                        </label>
-                        <input
-                          id="edit-semester"
-                          type="number"
-                          min={1}
-                          max={10}
-                          value={infoDraft.semester ?? ""}
-                          onChange={(e) => {
-                            const v = parseInt(e.target.value);
-                            setInfoDraft((d) => ({ ...d, semester: isNaN(v) ? null : Math.min(10, Math.max(1, v)) }));
-                          }}
-                          className="w-full px-4 py-3 rounded-xl outline-none"
-                          style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: `1.5px solid ${P.secondary}30` }}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
+                <textarea
+                  value={bioDraft}
+                  onChange={(e) => setBioDraft(e.target.value)}
+                  rows={5}
+                  className="w-full px-4 py-3 rounded-2xl resize-none outline-none"
+                  style={{
+                    fontSize: "0.9rem",
+                    fontWeight: 500,
+                    color: P.textPrimary,
+                    backgroundColor: P.bg,
+                    border: `1.5px solid ${P.secondary}20`,
+                  }}
+                  aria-label="Contenido de biografía"
+                />
                 <div className="flex justify-end gap-3 mt-5">
                   <button
                     type="button"
-                    onClick={() => setShowInfoEditor(false)}
+                    onClick={() => setShowBioEditor(false)}
                     className="px-4 py-2.5 rounded-xl transition-opacity hover:opacity-80"
                     style={{ backgroundColor: P.bg, color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
                   >
@@ -702,9 +618,95 @@ export function Profile() {
                   </button>
                   <button
                     type="button"
-                    onClick={handleSaveInfo}
-                    className="px-4 py-2.5 rounded-xl text-white flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
+                    onClick={handleSaveBio}
+                    className="px-4 py-2.5 rounded-xl text-white transition-transform hover:scale-105 active:scale-95"
                     style={{ backgroundColor: P.secondary, fontWeight: 700, fontSize: "0.82rem" }}
+                  >
+                    Guardar bio
+                  </button>
+                </div>
+              </div>
+            </ModalShell>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showPasswordModal && (
+            <ModalShell onClose={() => setShowPasswordModal(false)}>
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Cambiar contraseña</h3>
+                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>Ingresa la contraseña actual y confirma la nueva.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordModal(false)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: P.bg }}
+                    aria-label="Cerrar cambio de contraseña"
+                  >
+                    <X style={{ width: 16, height: 16, color: P.default }} />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { id: "current-password", label: "Contraseña actual", value: currentPassword, setter: setCurrentPassword },
+                    { id: "new-password", label: "Nueva contraseña", value: newPassword, setter: setNewPassword },
+                    { id: "confirm-password", label: "Verificar nueva contraseña", value: confirmPassword, setter: setConfirmPassword },
+                  ].map((field) => (
+                    <div key={field.id}>
+                      <label
+                        htmlFor={field.id}
+                        className="block mb-1.5"
+                        style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}
+                      >
+                        {field.label}
+                      </label>
+                      <input
+                        id={field.id}
+                        type="password"
+                        value={field.value}
+                        onChange={(e) => {
+                          field.setter(e.target.value);
+                          setPasswordError("");
+                        }}
+                        className="w-full px-4 py-3 rounded-xl outline-none transition-all focus:ring-2"
+                        style={{
+                          fontSize: "0.88rem",
+                          fontWeight: 500,
+                          backgroundColor: P.bg,
+                          color: P.textPrimary,
+                          border: "1.5px solid transparent",
+                          outline: `2px solid ${P.info}`,
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {passwordError && (
+                  <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl" style={{ backgroundColor: `${P.primary}12` }} role="alert">
+                    <AlertCircle style={{ width: 15, height: 15, color: P.primary }} />
+                    <span style={{ fontSize: "0.76rem", fontWeight: 600, color: P.primary }}>{passwordError}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end gap-3 mt-5">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordModal(false)}
+                    className="px-4 py-2.5 rounded-xl transition-opacity hover:opacity-80"
+                    style={{ backgroundColor: P.bg, color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSavePassword}
+                    className="px-4 py-2.5 rounded-xl text-white flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: P.info, fontWeight: 700, fontSize: "0.82rem" }}
                   >
                     <Save style={{ width: 14, height: 14 }} />
                     Guardar

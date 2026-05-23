@@ -1,6 +1,6 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { LandingPage } from "@/modules/auth/pages/LandingPage";
-import { Dashboard } from "@/modules/competition/pages/Dashboard";
+import Dashboard from "@/modules/users/pages/Dashboard";
 import { ArbitroDashboard } from "@/modules/teams/pages/ArbitroDashboard";
 import { OrganizerDashboard } from "@/modules/tournament/pages/OrganizerDashboard";
 import { CreateTournament } from "@/modules/tournament/pages/CreateTournament";
@@ -14,7 +14,6 @@ import { Profile } from "@/modules/users/pages/Profile";
 import { UserManagement } from "@/modules/admin/pages/UserManagement";
 import { SportsProfile } from "@/modules/users/pages/SportsProfile";
 import PlayerSearch from "@/modules/users/pages/PlayerSearch";
-import PendingInvitations from "@/modules/users/pages/PendingInvitations";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -45,7 +44,7 @@ export const router = createBrowserRouter([
       {
         Component: RequireAuth,
         children: [
-          { path: "dashboard", Component: Dashboard },
+          { path: "dashboard", element: <Navigate to="/dashboard-player" replace /> },
           { path: "dashboard-player", Component: Dashboard },
           { path: "dashboard-arbitro", Component: ArbitroDashboard },
           { path: "dashboard-arbitro/partido/:id", Component: MatchDetail },
@@ -71,7 +70,6 @@ export const router = createBrowserRouter([
           { path: "schedule", Component: Schedule },
           { path: "scores", Component: Scores },
           { path: "tournament", Component: Tournament },
-          { path: "pending-invitations", Component: PendingInvitations },
         ],
       },
     ],
