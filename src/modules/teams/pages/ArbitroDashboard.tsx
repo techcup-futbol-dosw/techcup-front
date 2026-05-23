@@ -119,14 +119,26 @@ export function ArbitroDashboard() {
   const [loadingMatches, setLoadingMatches] = useState(true);
 
   useEffect(() => {
-    matchService.getAssigned()
-      .then(setAllMatches)
-      .catch(() => setAllMatches([]))
-      .finally(() => setLoadingMatches(false));
-  }, []);
+      matchService.getAssigned()
+        .then(data => {
+          console.log("partidos recibidos:", data);
+          setAllMatches(data);
+        })
+        .catch(err => {
+          console.error("error getAssigned:", err);
+          setAllMatches([]);
+        })
+        .finally(() => setLoadingMatches(false));
+    }, []);
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const todayStr = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString().split("T")[0]; // da 2026-05-22 en Colombia
   const todayMatches = allMatches.filter((m) => m.date === todayStr);
+  console.log("todayStr:", todayStr);
+  console.log("allMatches:", allMatches);
+  console.log("todayMatches:", todayMatches);
+
 
   const updateScroll = () => {
     const el = scrollRef.current;
@@ -380,7 +392,7 @@ export function ArbitroDashboard() {
                       transition={{ delay: 0.2 + i * 0.08, duration: 0.4 }}
                       whileHover={{ scale: 1.03, backgroundColor: "rgba(255,255,255,0.16)" }}
                       whileTap={{ scale: 0.97 }}
-                      onClick={() => navigate(`/dashboard-arbitro/partido/${match.id}`)}
+                      onClick={() => navigate(`/dashboard-arbitro/partido/${match.id}`, { state: { match } })}
                       className="flex-shrink-0 rounded-[16px] p-4 flex flex-col gap-3 text-left cursor-pointer transition-colors duration-200"
                       style={{
                         width: 230,
