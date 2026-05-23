@@ -389,7 +389,7 @@ export function MatchDetail() {
 
   useEffect(() => {
     if (!id) return;
-    matchService.getById(Number(id))
+    matchService.getById(id)
       .then(setMatch)
       .catch(() => setMatch(null))
       .finally(() => setLoadingMatch(false));
@@ -397,11 +397,15 @@ export function MatchDetail() {
 
   const [matchState, setMatchState] = useState<MatchState>("no-iniciado");
 
-  // Sync matchState when match data arrives
+  // Sync matchState and score when match data arrives
   useEffect(() => {
-    if (match?.status === "en-curso") {
+    if (!match) return;
+    setScore({ a: match.homeScore, b: match.awayScore });
+    if (match.status === "en-curso") {
       setMatchState("en-curso");
       setTimerRunning(true);
+    } else if (match.status === "finalizado") {
+      setMatchState("finalizado");
     }
   }, [match]);
 
@@ -493,8 +497,9 @@ export function MatchDetail() {
     setTimeout(() => setToast(null), 2200);
   };
 
-  const handleEmpezar = () => {
-    if (matchState === "no-iniciado") {
+  const handleEmpezar = async () => {
+    if (matchState === "no-iniciado" && match) {
+      try { await matchService.start(match.id); } catch { /* continúa localmente */ }
       setMatchState("en-curso");
     }
     setTimerRunning(true);
@@ -514,22 +519,32 @@ export function MatchDetail() {
     showToast("¡Reanudado! Segunda parte", P.success);
   };
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     setTimerRunning(false);
-    setMatchState("finalizado");
     setConfirmModal(null);
+    if (match) {
+      try { await matchService.finish(match.id); } catch { /* continúa localmente */ }
+    }
+    setMatchState("finalizado");
     showToast("Partido finalizado correctamente", P.primary);
   };
 
   const registerEvent = (team: TeamKey, type: EventType, actor: string) => {
-    if (matchState !== "en-curso") return;
-    const teamName = team === "a" ? (match?.teamA ?? "Equipo A") : (match?.teamB ?? "Equipo B");
+    if (matchState !== "en-curso" || !match) return;
+    const teamName = team === "a" ? match.teamA : match.teamB;
+    const teamId   = team === "a" ? match.teamA : match.teamB; // homeTeamId / awayTeamId
+    const currentMinute = minute;
+
     setCounters((prev) => ({
       ...prev,
       [team]: { ...prev[team], [type]: prev[team][type] + 1 },
     }));
     if (type === "gol") {
       setScore((prev) => ({ ...prev, [team]: prev[team] + 1 }));
+      matchService.registerGoal(match.id, teamId, actor, currentMinute).catch(() => {});
+    } else {
+      const cardType = type === "amarilla" ? "YELLOW_CARD" : "RED_CARD";
+      matchService.registerCard(match.id, teamId, actor, cardType, currentMinute).catch(() => {});
     }
     setEventLog((prev) => [
       {
