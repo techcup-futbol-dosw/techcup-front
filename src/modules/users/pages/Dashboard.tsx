@@ -625,8 +625,8 @@ function InscriptionModal({
       const failedCount = playerResults.filter((r) => r.status === "rejected").length;
 
       const members: TeamRosterMember[] = [
-        { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
-        ...draftPlayers.map((p, i) => ({ id: i + 2, name: `Jugador ${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
+        { id: accountId!, name: "Capitán", email: "", role: "Capitán", jerseyNumber: captainNumber },
+        ...draftPlayers.map((p, i) => ({ id: i + 2, name: `#${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
       ];
 
       onClose();
@@ -1020,23 +1020,8 @@ export default function Dashboard() {
     if (!accountId) return;
 
     // Fetch user display name
-    userService.getMe()
+    userService.getMe(accountId!)
       .then((u) => setDisplayName(`${u.name} ${u.lastName}`))
-      .catch(() => {});
-
-    // Fetch notifications from API (merge with cached)
-    notificationService.getAll()
-      .then((apiNotifs) => {
-        setNotifs(apiNotifs.map((n) => ({
-          id: n.id,
-          type: n.type,
-          team: n.team ?? "",
-          captain: n.captain ?? "",
-          time: n.time,
-          status: n.status as "pending" | "uploaded" | undefined,
-          read: n.read,
-        })));
-      })
       .catch(() => {});
 
     teamService.getMyTeam()
@@ -1090,18 +1075,6 @@ export default function Dashboard() {
   }, [teamId, roleInTeam, teamStatus, teamName, teamLogoUrl, teamPrimaryColor, teamSecondaryColor, teamMembers, joinedAt, teamSchedule]);
 
   useEffect(() => { writeUICache(TEAM_NOTIFS_STORAGE_KEY, notifs); }, [notifs]);
-
-  const ensurePaymentNotification = () => {
-    setNotifs((prev) => {
-      if (prev.some((n) => n.type === "payment")) return prev;
-      return [{ id: Date.now(), type: "payment", team: "TECHCUP 2026", captain: "Organización", time: "Hace un momento", status: "pending", read: false }, ...prev];
-    });
-  };
-
-  useEffect(() => {
-    if (!isRegistered || teamStatus !== "pending-payment") return;
-    if (!notifs.some((n) => n.type === "payment")) ensurePaymentNotification();
-  }, [isRegistered, teamStatus, notifs]);
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -1274,7 +1247,6 @@ export default function Dashboard() {
               setTeamSecondaryColor(P.secondary);
               setJoinedAt(new Date().toISOString().split("T")[0]);
               setTeamSchedule(createTeamSchedule(createdTeamName));
-              ensurePaymentNotification();
               persistTeamContext({
                 teamId: createdTeamId,
                 roleInTeam: "capitan",

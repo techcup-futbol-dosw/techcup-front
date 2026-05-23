@@ -17,7 +17,6 @@ import {
   User,
   X,
   Save,
-  AlertCircle,
 } from "lucide-react";
 
 const P = {
@@ -135,7 +134,7 @@ export function Profile() {
 
   // Identity service data
   const [email, setEmail] = useState("");
-  const [bio, setBio] = useState("");
+  const [createdAt, setCreatedAt] = useState<string>("");
 
   // techchup-users data
   const [fullName, setFullName] = useState("");
@@ -155,10 +154,9 @@ export function Profile() {
   useEffect(() => {
     if (!accountId) return;
 
-    userService.getMe().then((u) => {
+    userService.getMe(accountId!).then((u) => {
       setEmail(u.email);
-      setBio(u.bio ?? "");
-      setBioDraft(u.bio ?? "");
+      setCreatedAt(u.createdAt ?? "");
     }).catch(() => {});
 
     userService.getUsersProfile(accountId).then((p) => {
@@ -192,16 +190,7 @@ export function Profile() {
   const [infoDraft, setInfoDraft] = useState<InfoDraft>({ fullName: "", schoolRelation: "", academicProgram: "", semester: null });
   const [showInfoEditor, setShowInfoEditor] = useState(false);
 
-  // Bio editor state
-  const [bioDraft, setBioDraft] = useState(bio);
-  const [showBioEditor, setShowBioEditor] = useState(false);
-
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordError, setPasswordError] = useState("");
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const activityRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -246,36 +235,6 @@ export function Profile() {
       showFeedback("Información actualizada correctamente.");
     } catch {
       showFeedback("No se pudo guardar la información.");
-    }
-  };
-
-  const openBioEditor = () => {
-    setBioDraft(bio);
-    setShowBioEditor(true);
-  };
-
-  const handleSaveBio = async () => {
-    try {
-      await userService.updateMe({ bio: bioDraft });
-      setBio(bioDraft);
-      setShowBioEditor(false);
-      showFeedback("Biografía actualizada correctamente.");
-    } catch {
-      showFeedback("No se pudo guardar la biografía.");
-    }
-  };
-
-  const handleSavePassword = async () => {
-    if (!currentPassword.trim()) { setPasswordError("Ingresa la contraseña actual."); return; }
-    if (newPassword.length < 6) { setPasswordError("La nueva contraseña debe tener al menos 6 caracteres."); return; }
-    if (newPassword !== confirmPassword) { setPasswordError("La nueva contraseña y su confirmación no coinciden."); return; }
-    try {
-      await userService.changePassword({ currentPassword, newPassword });
-      setShowPasswordModal(false);
-      setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setPasswordError("");
-      showFeedback("Contraseña actualizada correctamente.");
-    } catch {
-      setPasswordError("Contraseña actual incorrecta.");
     }
   };
 
@@ -495,8 +454,6 @@ export function Profile() {
                     </Link>
                   </div>
                 )}
-                <SectionLabel text="Biografía" color={P.default} />
-                <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio || "—"}</p>
               </motion.div>
             )}
 
@@ -563,23 +520,6 @@ export function Profile() {
                   </div>
                 </div>
 
-                {/* Biografía */}
-                <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
-                  <div className="flex items-start justify-between mb-5">
-                    <SectionLabel text="Biografía" color={P.default} />
-                    <button
-                      type="button"
-                      onClick={openBioEditor}
-                      className="flex items-center gap-1 flex-shrink-0 -mt-1 transition-colors hover:opacity-80"
-                      style={{ fontSize: "0.78rem", fontWeight: 600, color: P.default }}
-                    >
-                      <Edit2 style={{ width: 12, height: 12 }} />
-                      Editar
-                    </button>
-                  </div>
-                  <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio || "—"}</p>
-                </div>
-
                 {/* Seguridad */}
                 <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                   <div className="mb-5">
@@ -594,16 +534,12 @@ export function Profile() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>Contraseña</p>
-                      <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Actualizada hace 3 meses</p>
+                      {createdAt && (
+                        <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>
+                          Cuenta desde {new Date(createdAt).toLocaleDateString("es-CO", { year: "numeric", month: "long" })}
+                        </p>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowPasswordModal(true)}
-                      className="px-3 py-1.5 rounded-xl bg-white flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
-                      style={{ fontSize: "0.75rem", fontWeight: 600, color: P.textPrimary, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
-                    >
-                      Cambiar
-                    </button>
                   </div>
                 </div>
               </motion.div>
@@ -704,7 +640,6 @@ export function Profile() {
                       onChange={(e) => setInfoDraft((d) => ({
                         ...d,
                         schoolRelation: e.target.value,
-                        academicProgram: e.target.value !== "STUDENT" ? "" : d.academicProgram,
                         semester: e.target.value !== "STUDENT" ? null : d.semester,
                       }))}
                       className="w-full px-4 py-3 rounded-xl outline-none"
@@ -770,128 +705,6 @@ export function Profile() {
                     onClick={handleSaveInfo}
                     className="px-4 py-2.5 rounded-xl text-white flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
                     style={{ backgroundColor: P.secondary, fontWeight: 700, fontSize: "0.82rem" }}
-                  >
-                    <Save style={{ width: 14, height: 14 }} />
-                    Guardar
-                  </button>
-                </div>
-              </div>
-            </ModalShell>
-          )}
-        </AnimatePresence>
-
-        {/* Modal: editar biografía */}
-        <AnimatePresence>
-          {showBioEditor && (
-            <ModalShell onClose={() => setShowBioEditor(false)}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Editar biografía</h3>
-                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>Actualiza tu descripción pública.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowBioEditor(false)}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-                    style={{ backgroundColor: P.bg }}
-                    aria-label="Cerrar editor de biografía"
-                  >
-                    <X style={{ width: 16, height: 16, color: P.default }} />
-                  </button>
-                </div>
-                <textarea
-                  value={bioDraft}
-                  onChange={(e) => setBioDraft(e.target.value)}
-                  rows={5}
-                  className="w-full px-4 py-3 rounded-2xl resize-none outline-none"
-                  style={{ fontSize: "0.9rem", fontWeight: 500, color: P.textPrimary, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}20` }}
-                  aria-label="Contenido de biografía"
-                />
-                <div className="flex justify-end gap-3 mt-5">
-                  <button
-                    type="button"
-                    onClick={() => setShowBioEditor(false)}
-                    className="px-4 py-2.5 rounded-xl transition-opacity hover:opacity-80"
-                    style={{ backgroundColor: P.bg, color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
-                  >
-                    Cerrar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveBio}
-                    className="px-4 py-2.5 rounded-xl text-white transition-transform hover:scale-105 active:scale-95"
-                    style={{ backgroundColor: P.secondary, fontWeight: 700, fontSize: "0.82rem" }}
-                  >
-                    Guardar bio
-                  </button>
-                </div>
-              </div>
-            </ModalShell>
-          )}
-        </AnimatePresence>
-
-        {/* Modal: cambiar contraseña */}
-        <AnimatePresence>
-          {showPasswordModal && (
-            <ModalShell onClose={() => setShowPasswordModal(false)}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Cambiar contraseña</h3>
-                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>Ingresa la contraseña actual y confirma la nueva.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordModal(false)}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-                    style={{ backgroundColor: P.bg }}
-                    aria-label="Cerrar cambio de contraseña"
-                  >
-                    <X style={{ width: 16, height: 16, color: P.default }} />
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {[
-                    { id: "current-password", label: "Contraseña actual",          value: currentPassword, setter: setCurrentPassword },
-                    { id: "new-password",      label: "Nueva contraseña",           value: newPassword,     setter: setNewPassword },
-                    { id: "confirm-password",  label: "Verificar nueva contraseña", value: confirmPassword, setter: setConfirmPassword },
-                  ].map((field) => (
-                    <div key={field.id}>
-                      <label htmlFor={field.id} className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
-                        {field.label}
-                      </label>
-                      <input
-                        id={field.id}
-                        type="password"
-                        value={field.value}
-                        onChange={(e) => { field.setter(e.target.value); setPasswordError(""); }}
-                        className="w-full px-4 py-3 rounded-xl outline-none"
-                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: `1.5px solid ${P.info}30` }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {passwordError && (
-                  <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl" style={{ backgroundColor: `${P.primary}12` }} role="alert">
-                    <AlertCircle style={{ width: 15, height: 15, color: P.primary }} />
-                    <span style={{ fontSize: "0.76rem", fontWeight: 600, color: P.primary }}>{passwordError}</span>
-                  </div>
-                )}
-                <div className="flex justify-end gap-3 mt-5">
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordModal(false)}
-                    className="px-4 py-2.5 rounded-xl transition-opacity hover:opacity-80"
-                    style={{ backgroundColor: P.bg, color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
-                  >
-                    Cerrar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSavePassword}
-                    className="px-4 py-2.5 rounded-xl text-white flex items-center gap-2 transition-transform hover:scale-105 active:scale-95"
-                    style={{ backgroundColor: P.info, fontWeight: 700, fontSize: "0.82rem" }}
                   >
                     <Save style={{ width: 14, height: 14 }} />
                     Guardar
