@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useParams, useNavigate } from "react-router";
+import { useAuth } from "@/core/auth/AuthContext";
 import { matchService, type MatchDetailDto } from "../services/matchService";
 import {
   ArrowLeft,
@@ -382,18 +383,19 @@ function ActorPickerModal({
 export function MatchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { accountId } = useAuth();
 
   // ── Match data from API ──
   const [match, setMatch] = useState<MatchDetailDto | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
-    matchService.getById(Number(id))
+    if (!id || !accountId) return;
+    matchService.getById(accountId, id)
       .then(setMatch)
       .catch(() => setMatch(null))
       .finally(() => setLoadingMatch(false));
-  }, [id]);
+  }, [id, accountId]);
 
   const [matchState, setMatchState] = useState<MatchState>("no-iniciado");
 
@@ -496,6 +498,7 @@ export function MatchDetail() {
   const handleEmpezar = () => {
     if (matchState === "no-iniciado") {
       setMatchState("en-curso");
+      if (id) matchService.start(id).catch(() => {});
     }
     setTimerRunning(true);
     showToast("¡Cronómetro iniciado!", P.success);
@@ -518,6 +521,7 @@ export function MatchDetail() {
     setTimerRunning(false);
     setMatchState("finalizado");
     setConfirmModal(null);
+    if (id) matchService.finish(id).catch(() => {});
     showToast("Partido finalizado correctamente", P.primary);
   };
 
