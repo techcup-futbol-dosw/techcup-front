@@ -12,21 +12,38 @@ export type UserProfileDto = {
     gender: string;
     identificationType: string;
     identification: string;
-    bio?: string;
     status: string;
     roles: string[];
+    createdAt: string;
 };
 
-export type UpdateProfileRequest = {
-    name?: string;
-    lastName?: string;
-    bio?: string;
+// Matches UserResponse from techchup-users service
+export type UsersProfileDto = {
+    id: number;
+    fullName: string;
+    email: string;
+    identification: string;
+    birthDate: string;
+    gender: string;
+    schoolRelation: string;
+    academicProgram: string;
+    semester: number | null;
+    status: string;
+    profileCreatedAt: string;
+    updatedAt: string;
 };
 
-export type ChangePasswordRequest = {
-    currentPassword: string;
-    newPassword: string;
+// Matches UserProfileUpdateRequest from techchup-users service
+export type UpdateUsersProfileRequest = {
+    fullName: string;
+    identification: string;
+    birthDate: string;
+    gender: string;
+    schoolRelation: string;
+    academicProgram: string;
+    semester: number | null;
 };
+
 
 export type ActivityItemDto = {
     id: number;
@@ -36,16 +53,16 @@ export type ActivityItemDto = {
 };
 
 export const userService = {
-    getMe() {
-        return http.get<UserProfileDto>("/accounts/me");
+    getMe(id: number) {
+        return http.get<UserProfileDto>(`/accounts/${id}`);
     },
 
-    updateMe(payload: UpdateProfileRequest) {
-        return http.patch<UserProfileDto>("/accounts/me", payload);
+    getUsersProfile(id: number) {
+        return http.get<UsersProfileDto>(`/api/users/${id}`);
     },
 
-    changePassword(payload: ChangePasswordRequest) {
-        return http.patch<void>("/accounts/me/password", payload);
+    updateUsersProfile(payload: UpdateUsersProfileRequest) {
+        return http.put<UsersProfileDto>("/api/users/me", payload);
     },
 
     getActivity() {

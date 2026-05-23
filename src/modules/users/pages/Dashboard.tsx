@@ -7,7 +7,7 @@ import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
 import { useAuth } from "@/core/auth/AuthContext";
 import { teamService } from "@/modules/teams/services/teamService";
 import { tournamentService } from "@/modules/tournament/services/tournamentService";
-import { notificationService } from "@/modules/users/services/notificationService";
+import { invitationService, type InvitationDto } from "@/modules/users/services/invitationService";
 import { userService } from "@/modules/users/services/userService";
 import {
   User,
@@ -23,6 +23,7 @@ import {
   ChevronRight,
   ClipboardList,
   Shield,
+  Search,
   Trash2,
   Send,
   AlertCircle,
@@ -88,6 +89,26 @@ const navButtons = [
     iconGlow: "rgba(0,102,254,0.18)",
     hoverAccent: "rgba(0,102,254,0.04)",
     description: "Reglas, premios y datos del torneo",
+  },
+  {
+    label: "Buscar Jugadores",
+    icon: Search,
+    path: "/player-search",
+    color: "#7C3AED",
+    iconBg: "rgba(124,58,237,0.10)",
+    iconGlow: "rgba(124,58,237,0.18)",
+    hoverAccent: "rgba(124,58,237,0.04)",
+    description: "Encuentra y añade jugadores a tu equipo",
+  },
+  {
+    label: "Invitaciones Pendientes",
+    icon: Bell,
+    path: "/pending-invitations",
+    color: "#C4841D",
+    iconBg: "rgba(196,132,29,0.10)",
+    iconGlow: "rgba(196,132,29,0.20)",
+    hoverAccent: "rgba(196,132,29,0.04)",
+    description: "Revisa y responde invitaciones de equipos",
   },
 ];
 
@@ -169,7 +190,101 @@ const createTeamPerformance = (roster: TeamRosterMember[]): TeamPerformance => (
 
 const initialNotifs: Notification[] = [];
 
-// ── Notification Panel ────────────────────────────
+// ── Invitation Panel (solo invitaciones de equipos) ───
+type InvitationItem = InvitationDto & { teamName: string };
+
+function InvitationPanel({
+  invitations,
+  onClose,
+  onAccept,
+  onReject,
+}: {
+  invitations: InvitationItem[];
+  onClose: () => void;
+  onAccept: (id: number) => void;
+  onReject: (id: number) => void;
+}) {
+  const pending = invitations.filter((inv) => inv.status === "PENDING");
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 340, damping: 28 }}
+      className="fixed sm:absolute right-4 sm:right-0 left-4 sm:left-auto top-16 sm:top-12 w-auto sm:w-[380px] bg-white rounded-[20px] overflow-hidden z-50 max-h-[calc(100vh-5rem)] sm:max-h-none"
+      style={{ boxShadow: "0 8px 40px rgba(0,0,0,0.14)" }}
+    >
+      <div className="flex items-center justify-between px-5 py-4 border-b border-black/5">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4" style={{ color: P.primary }} />
+          <span className="text-sm" style={{ fontWeight: 700 }}>Invitaciones de equipos</span>
+          {pending.length > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: P.primary, fontWeight: 700 }}>
+              {pending.length}
+            </span>
+          )}
+        </div>
+        <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-[#F8F9FA] transition-colors duration-200">
+          <X className="w-4 h-4" style={{ color: P.default }} />
+        </button>
+      </div>
+
+      <div className="divide-y divide-black/4 max-h-[360px] overflow-y-auto">
+        {pending.length === 0 ? (
+          <div className="py-12 text-center">
+            <Users className="w-8 h-8 mx-auto mb-3" style={{ color: P.default }} />
+            <p className="text-sm" style={{ color: P.default, fontWeight: 500 }}>Sin invitaciones pendientes</p>
+          </div>
+        ) : (
+          pending.map((inv) => (
+            <div key={inv.id} className="px-5 py-4 flex items-start gap-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{ backgroundColor: `${P.secondary}18` }}
+              >
+                <Shield className="w-5 h-5" style={{ color: P.secondary }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm leading-snug" style={{ fontWeight: 700, color: P.textPrimary }}>
+                  {inv.teamName}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: P.default, fontWeight: 500 }}>
+                  Te han invitado a unirte a este equipo
+                </p>
+                <p className="text-[11px] mt-1" style={{ color: P.default, fontWeight: 500 }}>
+                  {new Date(inv.sentAt).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <motion.button
+                    whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                    onClick={() => onAccept(inv.id)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-white text-xs"
+                    style={{ backgroundColor: P.success, fontWeight: 700 }}
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Aceptar
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
+                    onClick={() => onReject(inv.id)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs"
+                    style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Rechazar
+                  </motion.button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ── Notification Panel (pagos) ────────────────────
 function NotifPanel({
   notifs,
   onClose,
@@ -530,8 +645,8 @@ function InscriptionModal({
       const failedCount = playerResults.filter((r) => r.status === "rejected").length;
 
       const members: TeamRosterMember[] = [
-        { id: 1, name: "Tú", email: "capitan@techcup.local", role: "Capitán", jerseyNumber: captainNumber },
-        ...draftPlayers.map((p, i) => ({ id: i + 2, name: `Jugador ${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
+        { id: accountId!, name: "Capitán", email: "", role: "Capitán", jerseyNumber: captainNumber },
+        ...draftPlayers.map((p, i) => ({ id: i + 2, name: `#${p.playerId}`, email: "", role: "Jugador" as const, jerseyNumber: p.dorsal })),
       ];
 
       onClose();
@@ -897,6 +1012,9 @@ export default function Dashboard() {
   const [showLogout, setShowLogout] = useState(false);
   const [notifs, setNotifs] = useState<Notification[]>(() => readUICache<Notification[]>(TEAM_NOTIFS_STORAGE_KEY, initialNotifs));
   const [notifOpen, setNotifOpen] = useState(false);
+  const [invitations, setInvitations] = useState<InvitationItem[]>([]);
+  const [invitOpen, setInvitOpen] = useState(false);
+  const invitRef = useRef<HTMLDivElement>(null);
   const [selectedNotif, setSelectedNotif] = useState<Notification | null>(null);
   const [toast, setToast] = useState<{ msg: string; color: string } | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -922,23 +1040,8 @@ export default function Dashboard() {
     if (!accountId) return;
 
     // Fetch user display name
-    userService.getMe()
+    userService.getMe(accountId!)
       .then((u) => setDisplayName(`${u.name} ${u.lastName}`))
-      .catch(() => {});
-
-    // Fetch notifications from API (merge with cached)
-    notificationService.getAll()
-      .then((apiNotifs) => {
-        setNotifs(apiNotifs.map((n) => ({
-          id: n.id,
-          type: n.type,
-          team: n.team ?? "",
-          captain: n.captain ?? "",
-          time: n.time,
-          status: n.status as "pending" | "uploaded" | undefined,
-          read: n.read,
-        })));
-      })
       .catch(() => {});
 
     teamService.getMyTeam()
@@ -953,6 +1056,18 @@ export default function Dashboard() {
         setJoinedAt(team.joinedAt);
         setTeamMembers((team.members ?? []).map((m) => ({ id: m.id, name: m.name ?? "", email: m.email ?? "", role: m.role ?? "Jugador", jerseyNumber: m.jerseyNumber ?? 0 })));
         setTeamSchedule(team.schedule ?? []);
+      })
+      .catch(() => {});
+
+    invitationService.getByUserId(accountId)
+      .then(async (list) => {
+        const withNames: InvitationItem[] = await Promise.all(
+          list.map(async (inv) => {
+            const team = await teamService.getTeam(inv.teamId).catch(() => null);
+            return { ...inv, teamName: team?.name ?? `Equipo #${inv.teamId}` };
+          })
+        );
+        setInvitations(withNames);
       })
       .catch(() => {});
   }, [accountId]);
@@ -981,18 +1096,6 @@ export default function Dashboard() {
 
   useEffect(() => { writeUICache(TEAM_NOTIFS_STORAGE_KEY, notifs); }, [notifs]);
 
-  const ensurePaymentNotification = () => {
-    setNotifs((prev) => {
-      if (prev.some((n) => n.type === "payment")) return prev;
-      return [{ id: Date.now(), type: "payment", team: "TECHCUP 2026", captain: "Organización", time: "Hace un momento", status: "pending", read: false }, ...prev];
-    });
-  };
-
-  useEffect(() => {
-    if (!isRegistered || teamStatus !== "pending-payment") return;
-    if (!notifs.some((n) => n.type === "payment")) ensurePaymentNotification();
-  }, [isRegistered, teamStatus, notifs]);
-
   useEffect(() => {
     if (!notifOpen) return;
     const handler = (e: MouseEvent) => { if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false); };
@@ -1000,11 +1103,30 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handler);
   }, [notifOpen]);
 
+  useEffect(() => {
+    if (!invitOpen) return;
+    const handler = (e: MouseEvent) => { if (invitRef.current && !invitRef.current.contains(e.target as Node)) setInvitOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [invitOpen]);
+
+  const handleAcceptInvitation = async (id: number) => {
+    await invitationService.accept(id).catch(() => {});
+    setInvitations((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: "ACCEPTED" as const } : inv));
+    showToast("Invitación aceptada. ¡Bienvenido al equipo!", P.success);
+    setInvitOpen(false);
+  };
+
+  const handleRejectInvitation = async (id: number) => {
+    await invitationService.reject(id).catch(() => {});
+    setInvitations((prev) => prev.map((inv) => inv.id === id ? { ...inv, status: "REJECTED" as const } : inv));
+    showToast("Invitación rechazada.", P.default);
+  };
+
   const showToast = (msg: string, color: string) => { setToast({ msg, color }); setTimeout(() => setToast(null), 2800); };
 
   const handleMarkRead = (id: number) => {
     setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    notificationService.markRead(id).catch(() => {});
   };
 
   const handleLogout = async () => {
@@ -1070,6 +1192,36 @@ export default function Dashboard() {
               </AnimatePresence>
             </div>
 
+            {/* Invitaciones de equipos */}
+            <div className="relative" ref={invitRef}>
+              <motion.button
+                whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.93 }}
+                onClick={() => setInvitOpen((v) => !v)}
+                className="relative w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-200"
+                style={{ background: invitOpen ? "rgba(184,28,28,0.08)" : "transparent" }}
+              >
+                <Users style={{ width: 19, height: 19, color: invitOpen ? P.primary : P.default }} />
+                {invitations.filter((i) => i.status === "PENDING").length > 0 && (
+                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-white border-2" style={{ backgroundColor: P.secondary, fontSize: 9, fontWeight: 800, borderColor: P.bg }}>
+                    {invitations.filter((i) => i.status === "PENDING").length}
+                  </motion.div>
+                )}
+              </motion.button>
+              <AnimatePresence>
+                {invitOpen && (
+                  <>
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setInvitOpen(false)} className="sm:hidden fixed inset-0 bg-black/20 backdrop-blur-sm z-40" />
+                    <InvitationPanel
+                      invitations={invitations}
+                      onClose={() => setInvitOpen(false)}
+                      onAccept={handleAcceptInvitation}
+                      onReject={handleRejectInvitation}
+                    />
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
             <motion.button whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.93 }} onClick={() => setShowLogout(true)} className="w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-200 hover:bg-[rgba(184,28,28,0.07)]">
               <LogOut style={{ width: 17, height: 17, color: P.default }} />
             </motion.button>
@@ -1114,7 +1266,6 @@ export default function Dashboard() {
               setTeamSecondaryColor(P.secondary);
               setJoinedAt(new Date().toISOString().split("T")[0]);
               setTeamSchedule(createTeamSchedule(createdTeamName));
-              ensurePaymentNotification();
               persistTeamContext({
                 teamId: createdTeamId,
                 roleInTeam: "capitan",
@@ -1272,12 +1423,17 @@ export default function Dashboard() {
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.76 }}
                 whileHover={{ y: -2, boxShadow: `0 10px 28px ${P.primary}30` }} whileTap={{ scale: 0.97 }}
                 type="button"
-                onClick={() => setNotifOpen(true)}
+                onClick={() => setInvitOpen(true)}
                 className="flex items-center gap-2 px-7 py-3 rounded-2xl text-sm"
                 style={{ background: P.primary, color: "white", fontWeight: 800, boxShadow: `0 4px 16px ${P.primary}28`, letterSpacing: "0.01em" }}
               >
                 <Users style={{ width: 15, height: 15 }} />
                 Ver Invitaciones
+                {invitations.filter((i) => i.status === "PENDING").length > 0 && (
+                  <span className="ml-1 text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.25)", fontWeight: 800 }}>
+                    {invitations.filter((i) => i.status === "PENDING").length}
+                  </span>
+                )}
               </motion.button>
             </div>
           ) : (
