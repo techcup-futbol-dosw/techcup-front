@@ -6,6 +6,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useParams, useNavigate } from "react-router";
 import { matchService, type MatchDetailDto } from "../services/matchService";
+import { tokenStorage } from "@/core/auth/tokenStorage";
+import { env } from "@/core/config/env";
 import {
   ArrowLeft,
   Square,
@@ -388,12 +390,52 @@ export function MatchDetail() {
   const [loadingMatch, setLoadingMatch] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
-    matchService.getById(Number(id))
-      .then(setMatch)
+      if (!id) return;
+      const token = tokenStorage.getAccessToken();
+      fetch(`${env.competitionsApiUrl}/api/matches/${id}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+      })
+      .then(r => r.json())
+      .then(data => {
+          setMatch({
+              id: data.id,
+              teamA: data.homeTeamId,
+              teamB: data.awayTeamId,
+              playersA: [],
+              playersB: [],
+              time: new Date(data.scheduledAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }),
+              date: data.scheduledAt.split("T")[0],
+              location: data.fieldId ?? "Por definir",
+              phase: data.phase,
+              status: data.status === "IN_PROGRESS" ? "en-curso" : data.status === "FINISHED" ? "finalizado" : "pendiente",
+          });
+      })
       .catch(() => setMatch(null))
       .finally(() => setLoadingMatch(false));
-  }, [id]);
+  }, [id]);useEffect(() => {
+               if (!id) return;
+               const token = tokenStorage.getAccessToken();
+               fetch(`${env.competitionsApiUrl}/api/matches/${id}`, {
+                   headers: { "Authorization": `Bearer ${token}` }
+               })
+               .then(r => r.json())
+               .then(data => {
+                   setMatch({
+                       id: data.id,
+                       teamA: data.homeTeamId,
+                       teamB: data.awayTeamId,
+                       playersA: [],
+                       playersB: [],
+                       time: new Date(data.scheduledAt).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }),
+                       date: data.scheduledAt.split("T")[0],
+                       location: data.fieldId ?? "Por definir",
+                       phase: data.phase,
+                       status: data.status === "IN_PROGRESS" ? "en-curso" : data.status === "FINISHED" ? "finalizado" : "pendiente",
+                   });
+               })
+               .catch(() => setMatch(null))
+               .finally(() => setLoadingMatch(false));
+           }, [id]);
 
   const [matchState, setMatchState] = useState<MatchState>("no-iniciado");
 
