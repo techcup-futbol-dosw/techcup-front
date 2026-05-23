@@ -1,7 +1,11 @@
 import { http } from "@/core/api/http";
-import { jwtDecode } from "jwt-decode";
 import { tokenStorage } from "@/core/auth/tokenStorage";
 import { env } from "@/core/config/env";
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+    const base64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(base64));
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,8 +90,8 @@ function adaptMatch(m: BackendMatch): AssignedMatchDto {
 export const matchService = {
     async getAssigned(): Promise<AssignedMatchDto[]> {
         const token = tokenStorage.getAccessToken();
-        const decoded: any = jwtDecode(token!);
-        const refereeId = decoded.sub;
+        const decoded = decodeJwtPayload(token!);
+        const refereeId = decoded.sub as string;
 
         const response = await fetch(`${env.competitionsApiUrl}/api/matches/referee/${refereeId}`, {
             headers: {
