@@ -14,6 +14,7 @@ import { Profile } from "@/modules/users/pages/Profile";
 import { UserManagement } from "@/modules/admin/pages/UserManagement";
 import { SportsProfile } from "@/modules/users/pages/SportsProfile";
 import PlayerSearch from "@/modules/users/pages/PlayerSearch";
+import PendingInvitations from "@/modules/users/pages/PendingInvitations";
 import { Login } from "@/modules/auth/pages/Login";
 import { Register } from "@/modules/auth/pages/Register";
 import { Matches } from "@/modules/competition/pages/Matches";
@@ -70,6 +71,7 @@ export const router = createBrowserRouter([
           { path: "schedule", Component: Schedule },
           { path: "scores", Component: Scores },
           { path: "tournament", Component: Tournament },
+          { path: "pending-invitations", Component: PendingInvitations },
         ],
       },
     ],
