@@ -65,6 +65,11 @@ async function loadSportProfilePhoto(photoId: string): Promise<string | null> {
   }
 }
 
+function splitFullName(fullName: string): { first: string; last: string } {
+  const parts = (fullName ?? "").trim().split(/\s+/);
+  return { first: parts[0] ?? "", last: parts.slice(1).join(" ") };
+}
+
 const ACTIVITY_COLOR: Record<string, string> = {
   tournament: P.success,
   security:   P.info,
@@ -139,14 +144,28 @@ export function Profile() {
 
   useEffect(() => {
     if (!accountId) return;
-    userService.getMe().then((u) => {
-      setFirstName(u.name);
-      setLastName(u.lastName);
-      setEmail(u.email);
-      setBio(u.bio ?? "");
-      setBioDraft(u.bio ?? "");
-    }).catch(() => {});
+
+    // Carga el perfil del usuario desde el microservicio de users (/api/users/{id})
+    userService.getUserById(accountId)
+      .then((u) => {
+        const { first, last } = splitFullName(u.fullName);
+        setFirstName(first);
+        setLastName(last);
+        setEmail(u.email ?? "");
+      })
+      .catch(() => {
+        // Fallback al servicio de identidad si el users service no está disponible
+        userService.getMe().then((u) => {
+          setFirstName(u.name ?? "");
+          setLastName(u.lastName ?? "");
+          setEmail(u.email ?? "");
+          setBio(u.bio ?? "");
+          setBioDraft(u.bio ?? "");
+        }).catch(() => {});
+      });
+
     userService.getActivity().then(setActivityLog).catch(() => {});
+
     sportProfileService.getByUserId(accountId).then(async (sp) => {
       setSportProfile(sp);
       if (sp.photoId) {

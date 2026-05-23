@@ -17,6 +17,22 @@ export type UserProfileDto = {
     roles: string[];
 };
 
+/** Respuesta real del users microservice (GET /api/users/{id}) */
+export type UserResponseDto = {
+    id: number;
+    fullName: string;
+    email: string;
+    identification?: string;
+    birthDate?: string;
+    gender?: string;
+    schoolRelation?: string;
+    academicProgram?: string;
+    semester?: number;
+    status?: string;
+    profileCreatedAt?: string;
+    updatedAt?: string;
+};
+
 export type UpdateProfileRequest = {
     name?: string;
     lastName?: string;
@@ -38,6 +54,11 @@ export type ActivityItemDto = {
 export const userService = {
     getMe() {
         return http.get<UserProfileDto>("/accounts/me");
+    },
+
+    /** Obtiene el perfil de un usuario del microservicio de users */
+    getUserById(id: number) {
+        return http.get<UserResponseDto>(`/api/users/${id}`);
     },
 
     updateMe(payload: UpdateProfileRequest) {
