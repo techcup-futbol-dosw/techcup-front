@@ -1,5 +1,6 @@
 import { http } from "@/core/api/http";
 import { tokenStorage } from "@/core/auth/tokenStorage";
+import { env } from "@/core/config/env";
 
 // ── JWT decode helper ──────────────────────────────────────────────────────
 
@@ -124,12 +125,21 @@ export const matchService = {
         if (!token) return [];
         const decoded = decodeJwtPayload(token);
         const refereeId = decoded.sub as string;
-        const raw = await http.get<BackendMatch[]>(`/api/matches/referee/${refereeId}`);
+        const response = await fetch(`${env.competitionsApiUrl}/api/matches/referee/${refereeId}`, {
+            headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!response.ok) return [];
+        const raw: BackendMatch[] = await response.json();
         return raw.map(adaptToAssigned);
     },
 
     async getById(id: string): Promise<MatchDetailDto> {
-        const raw = await http.get<BackendMatch>(`/api/matches/${id}`);
+        const token = tokenStorage.getAccessToken();
+        const response = await fetch(`${env.competitionsApiUrl}/api/matches/${id}`, {
+            headers: { "Authorization": `Bearer ${token ?? ""}` },
+        });
+        if (!response.ok) throw new Error(`Error ${response.status}`);
+        const raw: BackendMatch = await response.json();
         return adaptToDetail(raw);
     },
 
