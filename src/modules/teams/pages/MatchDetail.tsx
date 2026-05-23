@@ -450,29 +450,6 @@ export function MatchDetail() {
   const [actorPicker, setActorPicker] = useState<null | { team: TeamKey; type: EventType }>(null);
   const [recentActionsOpen, setRecentActionsOpen] = useState(false);
 
-  const teamActors: Record<TeamKey, string[]> = {
-    a: match?.playersA.map((p) => p.name) ?? [],
-    b: match?.playersB.map((p) => p.name) ?? [],
-  };
-
-  // Loading screen
-  if (loadingMatch) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
-        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Cargando partido...</p>
-      </div>
-    );
-  }
-
-  if (!match) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
-        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Partido no encontrado.</p>
-        <button onClick={() => navigate(-1)} style={{ color: "white", fontWeight: 600, fontSize: "0.85rem", textDecoration: "underline" }}>Volver</button>
-      </div>
-    );
-  }
-
   // Match timer (real seconds -> converts to minutes)
   useEffect(() => {
     if (timerRunning) {
@@ -508,6 +485,29 @@ export function MatchDetail() {
     }
     return () => { if (halfTimerRef.current) clearInterval(halfTimerRef.current); };
   }, [halfTimeOpen]);
+
+  const teamActors: Record<TeamKey, string[]> = {
+    a: match?.playersA.map((p) => p.name) ?? [],
+    b: match?.playersB.map((p) => p.name) ?? [],
+  };
+
+  // Loading screen
+  if (loadingMatch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
+        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Cargando partido...</p>
+      </div>
+    );
+  }
+
+  if (!match) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
+        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Partido no encontrado.</p>
+        <button onClick={() => navigate(-1)} style={{ color: "white", fontWeight: 600, fontSize: "0.85rem", textDecoration: "underline" }}>Volver</button>
+      </div>
+    );
+  }
 
   const showToast = (msg: string, color: string) => {
     setToast({ msg, color });
