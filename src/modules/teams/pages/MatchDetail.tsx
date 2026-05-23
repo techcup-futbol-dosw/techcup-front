@@ -4,7 +4,7 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useParams, useNavigate, useLocation } from "react-router";
+import { useParams, useNavigate } from "react-router";
 import { matchService, type MatchDetailDto, type AssignedMatchDto } from "../services/matchService";
 import {
   ArrowLeft,
@@ -382,7 +382,6 @@ function ActorPickerModal({
 export function MatchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const location = useLocation();
 
   // ── Match data from API ──
   const [match, setMatch] = useState<MatchDetailDto | null>(null);
@@ -391,8 +390,9 @@ export function MatchDetail() {
   useEffect(() => {
     if (!id) return;
 
-    // Primero intenta usar los datos que vienen del dashboard (sin llamada a API)
-    const stateMatch = (location.state as { match?: AssignedMatchDto } | null)?.match;
+    // React Router v6 guarda el navigation state en window.history.state.usr
+    const historyState = window.history.state as { usr?: { match?: AssignedMatchDto } } | null;
+    const stateMatch = historyState?.usr?.match;
     if (stateMatch) {
       setMatch({
         ...stateMatch,
