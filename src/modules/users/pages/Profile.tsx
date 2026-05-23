@@ -1,9 +1,12 @@
 import { motion, AnimatePresence } from "motion/react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
 import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
+import { sportProfileService, type SportProfileResponse } from "@/modules/users/services/sportProfileService";
 import { RELATIONS, PROGRAMS } from "@/core/constants/academicData";
+import { tokenStorage } from "@/core/auth/tokenStorage";
+import { env } from "@/core/config/env";
 import {
   ArrowLeft,
   Edit2,
@@ -28,6 +31,28 @@ const P = {
 };
 
 type Tab = "overview" | "settings" | "activity";
+
+const POSITION_LABELS: Record<string, string> = {
+  GOALKEEPER: "Portero",
+  DEFENDER: "Defensa",
+  MIDFIELDER: "Volante",
+  FORWARD: "Delantero",
+};
+
+async function loadSportProfilePhoto(photoId: string): Promise<string | null> {
+  const token = tokenStorage.getAccessToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(`${env.apiBaseUrl}/api/sport-profiles/photos/${photoId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  } catch {
+    return null;
+  }
+}
 
 function SectionLabel({ text, color }: { text: string; color: string }) {
   return (
@@ -108,7 +133,11 @@ export function Profile() {
   const { accountId } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("settings");
 
+  // Identity service data
   const [email, setEmail] = useState("");
+  const [bio, setBio] = useState("");
+
+  // techchup-users data
   const [fullName, setFullName] = useState("");
   const [identification, setIdentification] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -116,13 +145,22 @@ export function Profile() {
   const [schoolRelation, setSchoolRelation] = useState("");
   const [academicProgram, setAcademicProgram] = useState("");
   const [semester, setSemester] = useState<number | null>(null);
+
+  // Sport profile data
+  const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
 
   useEffect(() => {
     if (!accountId) return;
+
     userService.getMe().then((u) => {
       setEmail(u.email);
+      setBio(u.bio ?? "");
+      setBioDraft(u.bio ?? "");
     }).catch(() => {});
+
     userService.getUsersProfile(accountId).then((p) => {
       setFullName(p.fullName);
       setIdentification(p.identification);
@@ -132,16 +170,32 @@ export function Profile() {
       setAcademicProgram(p.academicProgram);
       setSemester(p.semester);
     }).catch(() => {});
+
     userService.getActivity().then(setActivityLog).catch(() => {});
+
+    sportProfileService.getByUserId(accountId).then(async (sp) => {
+      setSportProfile(sp);
+      if (sp.photoId) {
+        const url = await loadSportProfilePhoto(sp.photoId);
+        if (url) setProfilePhotoUrl(url);
+      }
+    }).catch(() => {});
   }, [accountId]);
 
-  const [infoDraft, setInfoDraft] = useState<InfoDraft>({
-    fullName: "",
-    schoolRelation: "",
-    academicProgram: "",
-    semester: null,
-  });
+  useEffect(() => {
+    return () => {
+      if (profilePhotoUrl) URL.revokeObjectURL(profilePhotoUrl);
+    };
+  }, [profilePhotoUrl]);
+
+  // Info editor state
+  const [infoDraft, setInfoDraft] = useState<InfoDraft>({ fullName: "", schoolRelation: "", academicProgram: "", semester: null });
   const [showInfoEditor, setShowInfoEditor] = useState(false);
+
+  // Bio editor state
+  const [bioDraft, setBioDraft] = useState(bio);
+  const [showBioEditor, setShowBioEditor] = useState(false);
+
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -162,8 +216,6 @@ export function Profile() {
   const dashboardPath = getDashboardPath(userContext);
   const badgeColor = getBadgeColor(userContext);
   const badgeLabel = getBadgeLabel(userContext);
-
-  const handleBack = () => navigate(dashboardPath);
 
   const showFeedback = (message: string) => {
     setFeedbackMessage(message);
@@ -197,26 +249,30 @@ export function Profile() {
     }
   };
 
+  const openBioEditor = () => {
+    setBioDraft(bio);
+    setShowBioEditor(true);
+  };
+
+  const handleSaveBio = async () => {
+    try {
+      await userService.updateMe({ bio: bioDraft });
+      setBio(bioDraft);
+      setShowBioEditor(false);
+      showFeedback("Biografía actualizada correctamente.");
+    } catch {
+      showFeedback("No se pudo guardar la biografía.");
+    }
+  };
+
   const handleSavePassword = async () => {
-    if (!currentPassword.trim()) {
-      setPasswordError("Ingresa la contraseña actual.");
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPasswordError("La nueva contraseña debe tener al menos 6 caracteres.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPasswordError("La nueva contraseña y su confirmación no coinciden.");
-      return;
-    }
+    if (!currentPassword.trim()) { setPasswordError("Ingresa la contraseña actual."); return; }
+    if (newPassword.length < 6) { setPasswordError("La nueva contraseña debe tener al menos 6 caracteres."); return; }
+    if (newPassword !== confirmPassword) { setPasswordError("La nueva contraseña y su confirmación no coinciden."); return; }
     try {
       await userService.changePassword({ currentPassword, newPassword });
       setShowPasswordModal(false);
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setPasswordError("");
+      setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); setPasswordError("");
       showFeedback("Contraseña actualizada correctamente.");
     } catch {
       setPasswordError("Contraseña actual incorrecta.");
@@ -237,13 +293,15 @@ export function Profile() {
       setActiveActivityId(activeActivityId === id ? null : id);
     }
   };
+  const handleActivityTouchStart = (id: string) => handleActivityMouseEnter(id);
+  const handleActivityTouchEnd   = (id: string) => setTimeout(() => handleActivityMouseLeave(id), 200);
 
   const relationLabel = RELATIONS.find((r) => r.value === schoolRelation)?.label ?? schoolRelation;
   const programLabel  = PROGRAMS.find((p) => p.value === academicProgram)?.label ?? academicProgram;
 
   const tabs: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
-    { id: "overview", label: "Resumen",  icon: LayoutGrid },
-    { id: "settings", label: "Ajustes",  icon: Settings },
+    { id: "overview", label: "Resumen",   icon: LayoutGrid },
+    { id: "settings", label: "Ajustes",   icon: Settings },
     { id: "activity", label: "Actividad", icon: Activity },
   ];
 
@@ -264,7 +322,7 @@ export function Profile() {
         <div className="max-w-3xl mx-auto flex items-center gap-3 h-[60px]">
           <button
             type="button"
-            onClick={handleBack}
+            onClick={() => navigate(dashboardPath)}
             className="w-9 h-9 rounded-xl flex items-center justify-center cursor-pointer flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
             style={{ backgroundColor: "white", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}
             aria-label="Volver al dashboard"
@@ -282,6 +340,7 @@ export function Profile() {
       </motion.header>
 
       <main className="max-w-3xl mx-auto px-6 sm:px-10 pt-10 pb-16 space-y-6">
+        {/* Profile card */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -291,40 +350,64 @@ export function Profile() {
         >
           <div className="flex items-start gap-4">
             <div className="relative flex-shrink-0">
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                style={{ backgroundColor: `${P.primary}14`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)" }}
-              >
-                <User style={{ width: 28, height: 28, color: P.primary }} />
-              </div>
-              <div
-                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
-                style={{ backgroundColor: P.success }}
-              />
+              {profilePhotoUrl ? (
+                <img
+                  src={profilePhotoUrl}
+                  alt={fullName}
+                  className="w-16 h-16 rounded-2xl object-cover"
+                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
+                />
+              ) : (
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{ backgroundColor: `${P.primary}14`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)" }}
+                >
+                  {fullName ? (
+                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: P.primary }}>
+                      {fullName.charAt(0).toUpperCase()}
+                    </span>
+                  ) : (
+                    <User style={{ width: 28, height: 28, color: P.primary }} />
+                  )}
+                </div>
+              )}
+              {sportProfile?.available && (
+                <div
+                  className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
+                  style={{ backgroundColor: P.success }}
+                />
+              )}
             </div>
+
             <div className="flex-1 min-w-0">
               <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: P.textPrimary, letterSpacing: "-0.02em" }}>
-                {fullName || "—"}
+                {fullName || "Cargando..."}
               </h2>
               <p className="mt-0.5" style={{ fontSize: "0.82rem", color: P.default, fontWeight: 500 }}>
                 {email}
               </p>
-              {schoolRelation && (
-                <div className="flex flex-wrap gap-2 mt-2.5">
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                {sportProfile?.position && (
                   <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                    {relationLabel.toUpperCase()}
+                    {POSITION_LABELS[sportProfile.position]}
                   </span>
-                  {schoolRelation === "STUDENT" && semester != null && (
-                    <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}>
-                      SEMESTRE {semester}
-                    </span>
-                  )}
-                </div>
-              )}
+                )}
+                {sportProfile?.dorsalNumber != null && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                    #{String(sportProfile.dorsalNumber).padStart(2, "0")}
+                  </span>
+                )}
+                {!sportProfile && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.default}14`, color: P.default, fontWeight: 600, letterSpacing: "0.05em" }}>
+                    Sin perfil deportivo
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>
 
+        {/* Tabs */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -342,11 +425,7 @@ export function Profile() {
                   onClick={() => setActiveTab(tab.id)}
                   type="button"
                   className="flex-1 flex items-center justify-center gap-2 py-3.5 relative transition-all duration-200"
-                  style={{
-                    fontWeight: isActive ? 700 : 500,
-                    color: isActive ? P.textPrimary : P.default,
-                    fontSize: "0.82rem",
-                  }}
+                  style={{ fontWeight: isActive ? 700 : 500, color: isActive ? P.textPrimary : P.default, fontSize: "0.82rem" }}
                 >
                   <Icon style={{ width: 15, height: 15 }} />
                   {tab.label}
@@ -363,6 +442,7 @@ export function Profile() {
           </div>
 
           <AnimatePresence mode="wait">
+            {/* ── Overview ── */}
             {activeTab === "overview" && (
               <motion.div
                 key="overview"
@@ -372,27 +452,55 @@ export function Profile() {
                 transition={{ duration: 0.22 }}
                 className="p-6"
               >
-                <SectionLabel text="Estadísticas" color={P.primary} />
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  {[
-                    { id: "stat-1", label: "Partidos Jugados", value: "42", color: P.primary },
-                    { id: "stat-2", label: "Victorias",        value: "28", color: P.success },
-                    { id: "stat-3", label: "Torneos",          value: "8",  color: P.secondary },
-                    { id: "stat-4", label: "Puntos Totales",   value: "2,450", color: P.info },
-                  ].map((s) => (
-                    <div key={s.id} className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: s.color, letterSpacing: "-0.02em" }}>
-                        {s.value}
+                <SectionLabel text="Perfil Deportivo" color={P.primary} />
+                {sportProfile ? (
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 800, color: P.secondary, letterSpacing: "-0.02em" }}>
+                        {sportProfile.position ? POSITION_LABELS[sportProfile.position] : "—"}
                       </p>
-                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>
-                        {s.label}
-                      </p>
+                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Posición</p>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: P.primary, letterSpacing: "-0.02em" }}>
+                        {sportProfile.dorsalNumber != null ? String(sportProfile.dorsalNumber).padStart(2, "0") : "—"}
+                      </p>
+                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Dorsal</p>
+                    </div>
+                    <div className="col-span-2 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <div>
+                        <p style={{ fontSize: "0.88rem", fontWeight: 700, color: sportProfile.available ? P.success : P.default }}>
+                          {sportProfile.available ? "Disponible para jugar" : "No disponible"}
+                        </p>
+                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Estado de disponibilidad</p>
+                      </div>
+                      <Link
+                        to="/sport-profile"
+                        className="px-3 py-1.5 rounded-xl text-xs"
+                        style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
+                      >
+                        Editar
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-6 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                    <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>Sin perfil deportivo configurado.</p>
+                    <Link
+                      to="/sport-profile"
+                      className="px-3 py-1.5 rounded-xl text-xs"
+                      style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
+                    >
+                      Completar
+                    </Link>
+                  </div>
+                )}
+                <SectionLabel text="Biografía" color={P.default} />
+                <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio || "—"}</p>
               </motion.div>
             )}
 
+            {/* ── Settings ── */}
             {activeTab === "settings" && (
               <motion.div
                 key="settings"
@@ -403,6 +511,7 @@ export function Profile() {
                 className="divide-y"
                 style={{ "--tw-divide-opacity": 1, borderColor: "rgba(0,0,0,0.05)" } as React.CSSProperties}
               >
+                {/* Información Personal */}
                 <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                   <div className="flex items-start justify-between mb-5">
                     <SectionLabel text="Información Personal" color={P.secondary} />
@@ -416,65 +525,36 @@ export function Profile() {
                       Editar
                     </button>
                   </div>
-
                   <div className="space-y-4">
                     <div>
-                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                        Nombre completo
-                      </p>
-                      <div
-                        className="w-full px-3.5 py-2.5 rounded-xl"
-                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}
-                      >
+                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Nombre completo</p>
+                      <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
                         {fullName || "—"}
                       </div>
                     </div>
-
                     <div>
-                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                        Correo electrónico
-                      </p>
-                      <div
-                        className="w-full px-3.5 py-2.5 rounded-xl"
-                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.default }}
-                      >
+                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Correo electrónico</p>
+                      <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.default }}>
                         {email || "—"}
                       </div>
                     </div>
-
                     <div>
-                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                        Relación con la Escuela
-                      </p>
-                      <div
-                        className="w-full px-3.5 py-2.5 rounded-xl"
-                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}
-                      >
+                      <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Relación con la Escuela</p>
+                      <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
                         {relationLabel || "—"}
                       </div>
                     </div>
-
                     {schoolRelation === "STUDENT" && (
                       <>
                         <div>
-                          <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                            Programa académico
-                          </p>
-                          <div
-                            className="w-full px-3.5 py-2.5 rounded-xl"
-                            style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}
-                          >
+                          <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Programa académico</p>
+                          <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
                             {programLabel || "—"}
                           </div>
                         </div>
                         <div>
-                          <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>
-                            Semestre
-                          </p>
-                          <div
-                            className="w-full px-3.5 py-2.5 rounded-xl"
-                            style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}
-                          >
+                          <p className="mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 600, color: P.default }}>Semestre</p>
+                          <div className="w-full px-3.5 py-2.5 rounded-xl" style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary }}>
                             {semester ?? "—"}
                           </div>
                         </div>
@@ -483,36 +563,53 @@ export function Profile() {
                   </div>
                 </div>
 
+                {/* Biografía */}
                 <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
                   <div className="flex items-start justify-between mb-5">
+                    <SectionLabel text="Biografía" color={P.default} />
+                    <button
+                      type="button"
+                      onClick={openBioEditor}
+                      className="flex items-center gap-1 flex-shrink-0 -mt-1 transition-colors hover:opacity-80"
+                      style={{ fontSize: "0.78rem", fontWeight: 600, color: P.default }}
+                    >
+                      <Edit2 style={{ width: 12, height: 12 }} />
+                      Editar
+                    </button>
+                  </div>
+                  <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio || "—"}</p>
+                </div>
+
+                {/* Seguridad */}
+                <div className="p-6" style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                  <div className="mb-5">
                     <SectionLabel text="Seguridad y Acceso" color={P.info} />
                   </div>
-                  <div className="space-y-3">
-                    <div
-                      className="flex items-center gap-3 p-3.5 rounded-2xl"
-                      style={{ backgroundColor: P.bg }}
-                    >
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${P.info}12` }}>
-                        <KeyRound style={{ width: 16, height: 16, color: P.info }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>Contraseña</p>
-                        <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Actualizada hace 3 meses</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowPasswordModal(true)}
-                        className="px-3 py-1.5 rounded-xl bg-white flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
-                        style={{ fontSize: "0.75rem", fontWeight: 600, color: P.textPrimary, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
-                      >
-                        Cambiar
-                      </button>
+                  <div
+                    className="flex items-center gap-3 p-3.5 rounded-2xl"
+                    style={{ backgroundColor: P.bg }}
+                  >
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${P.info}12` }}>
+                      <KeyRound style={{ width: 16, height: 16, color: P.info }} />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>Contraseña</p>
+                      <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Actualizada hace 3 meses</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPasswordModal(true)}
+                      className="px-3 py-1.5 rounded-xl bg-white flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+                      style={{ fontSize: "0.75rem", fontWeight: 600, color: P.textPrimary, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+                    >
+                      Cambiar
+                    </button>
                   </div>
                 </div>
               </motion.div>
             )}
 
+            {/* ── Activity ── */}
             {activeTab === "activity" && (
               <motion.div
                 key="activity"
@@ -544,6 +641,8 @@ export function Profile() {
                         onMouseEnter={() => handleActivityMouseEnter(key)}
                         onMouseLeave={() => handleActivityMouseLeave(key)}
                         onKeyDown={(e) => handleActivityKeyDown(e, key)}
+                        onTouchStart={() => handleActivityTouchStart(key)}
+                        onTouchEnd={() => handleActivityTouchEnd(key)}
                         aria-label={`Actividad: ${item.action}, ${item.createdAt}`}
                         aria-pressed={activeActivityId === key}
                       >
@@ -581,7 +680,6 @@ export function Profile() {
                     <X style={{ width: 16, height: 16, color: P.default }} />
                   </button>
                 </div>
-
                 <div className="space-y-3">
                   <div>
                     <label htmlFor="edit-fullname" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
@@ -596,7 +694,6 @@ export function Profile() {
                       style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: `1.5px solid ${P.secondary}30` }}
                     />
                   </div>
-
                   <div>
                     <label htmlFor="edit-relation" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
                       Relación con la Escuela
@@ -619,7 +716,6 @@ export function Profile() {
                       ))}
                     </select>
                   </div>
-
                   {infoDraft.schoolRelation === "STUDENT" && (
                     <>
                       <div>
@@ -639,7 +735,6 @@ export function Profile() {
                           ))}
                         </select>
                       </div>
-
                       <div>
                         <label htmlFor="edit-semester" className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
                           Semestre
@@ -661,7 +756,6 @@ export function Profile() {
                     </>
                   )}
                 </div>
-
                 <div className="flex justify-end gap-3 mt-5">
                   <button
                     type="button"
@@ -679,6 +773,57 @@ export function Profile() {
                   >
                     <Save style={{ width: 14, height: 14 }} />
                     Guardar
+                  </button>
+                </div>
+              </div>
+            </ModalShell>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: editar biografía */}
+        <AnimatePresence>
+          {showBioEditor && (
+            <ModalShell onClose={() => setShowBioEditor(false)}>
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: P.textPrimary }}>Editar biografía</h3>
+                    <p style={{ fontSize: "0.78rem", color: P.default, fontWeight: 500 }}>Actualiza tu descripción pública.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBioEditor(false)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: P.bg }}
+                    aria-label="Cerrar editor de biografía"
+                  >
+                    <X style={{ width: 16, height: 16, color: P.default }} />
+                  </button>
+                </div>
+                <textarea
+                  value={bioDraft}
+                  onChange={(e) => setBioDraft(e.target.value)}
+                  rows={5}
+                  className="w-full px-4 py-3 rounded-2xl resize-none outline-none"
+                  style={{ fontSize: "0.9rem", fontWeight: 500, color: P.textPrimary, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}20` }}
+                  aria-label="Contenido de biografía"
+                />
+                <div className="flex justify-end gap-3 mt-5">
+                  <button
+                    type="button"
+                    onClick={() => setShowBioEditor(false)}
+                    className="px-4 py-2.5 rounded-xl transition-opacity hover:opacity-80"
+                    style={{ backgroundColor: P.bg, color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveBio}
+                    className="px-4 py-2.5 rounded-xl text-white transition-transform hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: P.secondary, fontWeight: 700, fontSize: "0.82rem" }}
+                  >
+                    Guardar bio
                   </button>
                 </div>
               </div>
@@ -706,12 +851,11 @@ export function Profile() {
                     <X style={{ width: 16, height: 16, color: P.default }} />
                   </button>
                 </div>
-
                 <div className="space-y-3">
                   {[
-                    { id: "current-password",  label: "Contraseña actual",           value: currentPassword,  setter: setCurrentPassword },
-                    { id: "new-password",       label: "Nueva contraseña",            value: newPassword,      setter: setNewPassword },
-                    { id: "confirm-password",   label: "Verificar nueva contraseña",  value: confirmPassword,  setter: setConfirmPassword },
+                    { id: "current-password", label: "Contraseña actual",          value: currentPassword, setter: setCurrentPassword },
+                    { id: "new-password",      label: "Nueva contraseña",           value: newPassword,     setter: setNewPassword },
+                    { id: "confirm-password",  label: "Verificar nueva contraseña", value: confirmPassword, setter: setConfirmPassword },
                   ].map((field) => (
                     <div key={field.id}>
                       <label htmlFor={field.id} className="block mb-1.5" style={{ fontSize: "0.75rem", fontWeight: 700, color: P.default }}>
@@ -728,14 +872,12 @@ export function Profile() {
                     </div>
                   ))}
                 </div>
-
                 {passwordError && (
                   <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl" style={{ backgroundColor: `${P.primary}12` }} role="alert">
                     <AlertCircle style={{ width: 15, height: 15, color: P.primary }} />
                     <span style={{ fontSize: "0.76rem", fontWeight: 600, color: P.primary }}>{passwordError}</span>
                   </div>
                 )}
-
                 <div className="flex justify-end gap-3 mt-5">
                   <button
                     type="button"
