@@ -1,6 +1,5 @@
 import { http } from "@/core/api/http";
-import { sanitizeFileName } from "@/core/utils/fileutils";
-
+import { tokenStorage } from "@/core/auth/tokenStorage";
 // ── Backend raw types (lo que devuelve el microservicio) ───────────────────
 
 type BackendInscription = {
@@ -281,7 +280,7 @@ export const tournamentService = {
     uploadRegulation: async (file: File): Promise<{ url: string; fileName: string }> => {
     const formData = new FormData();
     formData.append("file", file);
-
+    const token = tokenStorage.getAccessToken();
     try {
         const response = await http.post<{ data: UploadResponse }>(
         "/api/tournaments/regulation/upload",
@@ -289,6 +288,7 @@ export const tournamentService = {
         {
             headers: {
             "Content-Type": "multipart/form-data",
+            "Authorization": `Bearer ${token}`
             },
         }
         );
