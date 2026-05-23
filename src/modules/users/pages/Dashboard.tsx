@@ -7,7 +7,6 @@ import { readUICache, writeUICache, removeUICache } from "@/core/utils/uiCache";
 import { useAuth } from "@/core/auth/AuthContext";
 import { teamService } from "@/modules/teams/services/teamService";
 import { tournamentService } from "@/modules/tournament/services/tournamentService";
-import { notificationService } from "@/modules/users/services/notificationService";
 import { invitationService, type InvitationDto } from "@/modules/users/services/invitationService";
 import { userService } from "@/modules/users/services/userService";
 import {
@@ -1107,7 +1106,6 @@ export default function Dashboard() {
 
   const handleMarkRead = (id: number) => {
     setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
-    notificationService.markRead(id).catch(() => {});
   };
 
   const handleLogout = async () => {
