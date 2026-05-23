@@ -17,6 +17,33 @@ export type UserProfileDto = {
     roles: string[];
 };
 
+// Matches UserResponse from techchup-users service
+export type UsersProfileDto = {
+    id: number;
+    fullName: string;
+    email: string;
+    identification: string;
+    birthDate: string;
+    gender: string;
+    schoolRelation: string;
+    academicProgram: string;
+    semester: number | null;
+    status: string;
+    profileCreatedAt: string;
+    updatedAt: string;
+};
+
+// Matches UserProfileUpdateRequest from techchup-users service
+export type UpdateUsersProfileRequest = {
+    fullName: string;
+    identification: string;
+    birthDate: string;
+    gender: string;
+    schoolRelation: string;
+    academicProgram: string;
+    semester: number | null;
+};
+
 export type UpdateProfileRequest = {
     name?: string;
     lastName?: string;
@@ -38,6 +65,14 @@ export type ActivityItemDto = {
 export const userService = {
     getMe() {
         return http.get<UserProfileDto>("/accounts/me");
+    },
+
+    getUsersProfile(id: number) {
+        return http.get<UsersProfileDto>(`/api/users/${id}`);
+    },
+
+    updateUsersProfile(payload: UpdateUsersProfileRequest) {
+        return http.put<UsersProfileDto>("/api/users/me", payload);
     },
 
     updateMe(payload: UpdateProfileRequest) {
