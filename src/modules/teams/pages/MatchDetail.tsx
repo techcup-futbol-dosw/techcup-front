@@ -4,8 +4,8 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useParams, useNavigate } from "react-router";
-import { matchService, type MatchDetailDto } from "../services/matchService";
+import { useParams, useNavigate, useLocation } from "react-router";
+import { matchService, type MatchDetailDto, type AssignedMatchDto } from "../services/matchService";
 import {
   ArrowLeft,
   Square,
@@ -382,6 +382,7 @@ function ActorPickerModal({
 export function MatchDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ── Match data from API ──
   const [match, setMatch] = useState<MatchDetailDto | null>(null);
@@ -389,6 +390,22 @@ export function MatchDetail() {
 
   useEffect(() => {
     if (!id) return;
+
+    // Primero intenta usar los datos que vienen del dashboard (sin llamada a API)
+    const stateMatch = (location.state as { match?: AssignedMatchDto } | null)?.match;
+    if (stateMatch) {
+      setMatch({
+        ...stateMatch,
+        playersA: [],
+        playersB: [],
+        homeScore: 0,
+        awayScore: 0,
+      });
+      setLoadingMatch(false);
+      return;
+    }
+
+    // Fallback: busca en la API si no hay datos en el state
     matchService.getById(id)
       .then(setMatch)
       .catch(() => setMatch(null))
