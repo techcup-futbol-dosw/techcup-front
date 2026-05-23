@@ -65,11 +65,6 @@ async function loadSportProfilePhoto(photoId: string): Promise<string | null> {
   }
 }
 
-function splitFullName(fullName: string): { first: string; last: string } {
-  const parts = (fullName ?? "").trim().split(/\s+/);
-  return { first: parts[0] ?? "", last: parts.slice(1).join(" ") };
-}
-
 const ACTIVITY_COLOR: Record<string, string> = {
   tournament: P.success,
   security:   P.info,
@@ -138,6 +133,7 @@ export function Profile() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
+  const [bioDraft, setBioDraft] = useState("");
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
   const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
@@ -145,24 +141,15 @@ export function Profile() {
   useEffect(() => {
     if (!accountId) return;
 
-    // Carga el perfil del usuario desde el microservicio de users (/api/users/{id})
-    userService.getUserById(accountId)
+    userService.getMe()
       .then((u) => {
-        const { first, last } = splitFullName(u.fullName);
-        setFirstName(first);
-        setLastName(last);
+        setFirstName(u.name ?? "");
+        setLastName(u.lastName ?? "");
         setEmail(u.email ?? "");
+        setBio(u.bio ?? "");
+        setBioDraft(u.bio ?? "");
       })
-      .catch(() => {
-        // Fallback al servicio de identidad si el users service no está disponible
-        userService.getMe().then((u) => {
-          setFirstName(u.name ?? "");
-          setLastName(u.lastName ?? "");
-          setEmail(u.email ?? "");
-          setBio(u.bio ?? "");
-          setBioDraft(u.bio ?? "");
-        }).catch(() => {});
-      });
+      .catch(() => {});
 
     userService.getActivity().then(setActivityLog).catch(() => {});
 
@@ -181,7 +168,6 @@ export function Profile() {
     };
   }, [profilePhotoUrl]);
 
-  const [bioDraft, setBioDraft] = useState(bio);
   const [showBioEditor, setShowBioEditor] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
