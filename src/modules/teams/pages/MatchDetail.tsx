@@ -411,7 +411,6 @@ export function MatchDetail() {
   useEffect(() => {
     if (!id) return;
 
-    // React Router v6 guarda el navigation state en window.history.state.usr
     const historyState = window.history.state as { usr?: { match?: AssignedMatchDto } } | null;
     const stateMatch = historyState?.usr?.match;
     if (stateMatch) {
@@ -422,15 +421,20 @@ export function MatchDetail() {
         homeScore: 0,
         awayScore: 0,
       });
-      setLoadingMatch(false);
-      return;
     }
 
-    // Fallback: busca en la API si no hay datos en el state
+    setLoadingMatch(true);
+
     matchService.getById(id)
-      .then(setMatch)
-      .catch(() => setMatch(null))
-      .finally(() => setLoadingMatch(false));
+        .then(setMatch)
+        .catch((error) => {
+          console.error("Error cargando detalle del partido:", error);
+
+          if (!stateMatch) {
+            setMatch(null);
+          }
+        })
+        .finally(() => setLoadingMatch(false));
   }, [id]);
 
   const [matchState, setMatchState] = useState<MatchState>("no-iniciado");
