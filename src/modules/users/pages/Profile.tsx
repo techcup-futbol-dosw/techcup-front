@@ -1,11 +1,8 @@
 ﻿import { motion, AnimatePresence } from "motion/react";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
 import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
-import { sportProfileService, type SportProfileResponse } from "@/modules/users/services/sportProfileService";
-import { tokenStorage } from "@/core/auth/tokenStorage";
-import { env } from "@/core/config/env";
 import {
   ArrowLeft,
   Edit2,
@@ -41,28 +38,6 @@ function SectionLabel({ text, color }: { text: string; color: string }) {
       <div className="flex-1 h-px" style={{ background: `linear-gradient(90deg, ${color}30, transparent)` }} />
     </div>
   );
-}
-
-const POSITION_LABELS: Record<string, string> = {
-  GOALKEEPER: "Portero",
-  DEFENDER: "Defensa",
-  MIDFIELDER: "Volante",
-  FORWARD: "Delantero",
-};
-
-async function loadSportProfilePhoto(photoId: string): Promise<string | null> {
-  const token = tokenStorage.getAccessToken();
-  if (!token) return null;
-  try {
-    const res = await fetch(`${env.apiBaseUrl}/api/sport-profiles/photos/${photoId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
 }
 
 const ACTIVITY_COLOR: Record<string, string> = {
@@ -133,41 +108,21 @@ export function Profile() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
-  const [bioDraft, setBioDraft] = useState("");
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
-  const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accountId) return;
-
-    userService.getMe()
-      .then((u) => {
-        setFirstName(u.name ?? "");
-        setLastName(u.lastName ?? "");
-        setEmail(u.email ?? "");
-        setBio(u.bio ?? "");
-        setBioDraft(u.bio ?? "");
-      })
-      .catch(() => {});
-
-    userService.getActivity().then(setActivityLog).catch(() => {});
-
-    sportProfileService.getByUserId(accountId).then(async (sp) => {
-      setSportProfile(sp);
-      if (sp.photoId) {
-        const url = await loadSportProfilePhoto(sp.photoId);
-        if (url) setProfilePhotoUrl(url);
-      }
+    userService.getMe().then((u) => {
+      setFirstName(u.name);
+      setLastName(u.lastName);
+      setEmail(u.email);
+      setBio(u.bio ?? "");
+      setBioDraft(u.bio ?? "");
     }).catch(() => {});
+    userService.getActivity().then(setActivityLog).catch(() => {});
   }, [accountId]);
 
-  useEffect(() => {
-    return () => {
-      if (profilePhotoUrl) URL.revokeObjectURL(profilePhotoUrl);
-    };
-  }, [profilePhotoUrl]);
-
+  const [bioDraft, setBioDraft] = useState(bio);
   const [showBioEditor, setShowBioEditor] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
@@ -325,58 +280,32 @@ export function Profile() {
         >
           <div className="flex items-start gap-4">
             <div className="relative flex-shrink-0">
-              {profilePhotoUrl ? (
-                <img
-                  src={profilePhotoUrl}
-                  alt={`${firstName} ${lastName}`}
-                  className="w-16 h-16 rounded-2xl object-cover"
-                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
-                />
-              ) : (
-                <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: `${P.primary}14`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)" }}
-                >
-                  {firstName ? (
-                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: P.primary }}>
-                      {firstName.charAt(0).toUpperCase()}
-                    </span>
-                  ) : (
-                    <User style={{ width: 28, height: 28, color: P.primary }} />
-                  )}
-                </div>
-              )}
-              {sportProfile?.available && (
-                <div
-                  className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
-                  style={{ backgroundColor: P.success }}
-                />
-              )}
+              <img
+                src="https://images.unsplash.com/photo-1759701546662-b79f5d881124?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMG1hbiUyMGF0aGxldGUlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwxfHx8fDE3NzI2MzUxNDB8MA&ixlib=rb-4.1.0&q=80&w=400"
+                alt="Alex Rivers"
+                className="w-16 h-16 rounded-2xl object-cover"
+                style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
+              />
+              <div
+                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
+                style={{ backgroundColor: P.success }}
+              />
             </div>
 
             <div className="flex-1 min-w-0">
               <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: P.textPrimary, letterSpacing: "-0.02em" }}>
-                {firstName || lastName ? `${firstName} ${lastName}`.trim() : "Cargando..."}
+                Alex Rivers
               </h2>
               <p className="mt-0.5" style={{ fontSize: "0.82rem", color: P.default, fontWeight: 500 }}>
-                {email}
+                alex.rivers@techcup.io
               </p>
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {sportProfile?.position && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                    {POSITION_LABELS[sportProfile.position]}
-                  </span>
-                )}
-                {sportProfile?.dorsalNumber != null && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                    #{String(sportProfile.dorsalNumber).padStart(2, "0")}
-                  </span>
-                )}
-                {!sportProfile && (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.default}14`, color: P.default, fontWeight: 600, letterSpacing: "0.05em" }}>
-                    Sin perfil deportivo
-                  </span>
-                )}
+                <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                  PRO ATHLETE
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                  TECHLEAD ELITE
+                </span>
               </div>
             </div>
           </div>
@@ -429,49 +358,24 @@ export function Profile() {
                 transition={{ duration: 0.22 }}
                 className="p-6"
               >
-                <SectionLabel text="Perfil Deportivo" color={P.primary} />
-                {sportProfile ? (
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <p style={{ fontSize: "1.1rem", fontWeight: 800, color: P.secondary, letterSpacing: "-0.02em" }}>
-                        {sportProfile.position ? POSITION_LABELS[sportProfile.position] : "—"}
+                <SectionLabel text="Estadísticas" color={P.primary} />
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  {[
+                    { id: "stat-1", label: "Partidos Jugados", value: "42", color: P.primary },
+                    { id: "stat-2", label: "Victorias", value: "28", color: P.success },
+                    { id: "stat-3", label: "Torneos", value: "8", color: P.secondary },
+                    { id: "stat-4", label: "Puntos Totales", value: "2,450", color: P.info },
+                  ].map((s) => (
+                    <div key={s.id} className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: s.color, letterSpacing: "-0.02em" }}>
+                        {s.value}
                       </p>
-                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Posición</p>
-                    </div>
-                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: P.primary, letterSpacing: "-0.02em" }}>
-                        {sportProfile.dorsalNumber != null ? String(sportProfile.dorsalNumber).padStart(2, "0") : "—"}
+                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>
+                        {s.label}
                       </p>
-                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Dorsal</p>
                     </div>
-                    <div className="col-span-2 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <div>
-                        <p style={{ fontSize: "0.88rem", fontWeight: 700, color: sportProfile.available ? P.success : P.default }}>
-                          {sportProfile.available ? "Disponible para jugar" : "No disponible"}
-                        </p>
-                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Estado de disponibilidad</p>
-                      </div>
-                      <Link
-                        to="/sport-profile"
-                        className="px-3 py-1.5 rounded-xl text-xs"
-                        style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
-                      >
-                        Editar
-                      </Link>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mb-6 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                    <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>Sin perfil deportivo configurado.</p>
-                    <Link
-                      to="/sport-profile"
-                      className="px-3 py-1.5 rounded-xl text-xs"
-                      style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700 }}
-                    >
-                      Completar
-                    </Link>
-                  </div>
-                )}
+                  ))}
+                </div>
                 <SectionLabel text="Biografía" color={P.default} />
                 <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio}</p>
               </motion.div>
