@@ -2,11 +2,9 @@ import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
-import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
+import { userService, type ActivityItemDto, type UpdateUsersProfileRequest } from "@/modules/users/services/userService";
 import { sportProfileService, type SportProfileResponse } from "@/modules/users/services/sportProfileService";
 import { RELATIONS, PROGRAMS } from "@/core/constants/academicData";
-import { tokenStorage } from "@/core/auth/tokenStorage";
-import { env } from "@/core/config/env";
 import {
   ArrowLeft,
   Edit2,
@@ -38,20 +36,7 @@ const POSITION_LABELS: Record<string, string> = {
   FORWARD: "Delantero",
 };
 
-async function loadSportProfilePhoto(photoId: string): Promise<string | null> {
-  const token = tokenStorage.getAccessToken();
-  if (!token) return null;
-  try {
-    const res = await fetch(`${env.apiBaseUrl}/api/sport-profiles/photos/${photoId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  } catch {
-    return null;
-  }
-}
+
 
 function SectionLabel({ text, color }: { text: string; color: string }) {
   return (
@@ -147,44 +132,36 @@ export function Profile() {
 
   // Sport profile data
   const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string>("");
 
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
 
   useEffect(() => {
     if (!accountId) return;
 
-    userService.getMe(accountId!).then((u) => {
-      setEmail(u.email);
-      setCreatedAt(u.createdAt ?? "");
+    userService.getUsersProfile(accountId).then((profile) => {
+      setEmail(profile.email);
+      setFullName(profile.fullName);
+      setIdentification(profile.identification ?? "");
+      setBirthDate(profile.birthDate ?? "");
+      setGender(profile.gender ?? "");
+      setSchoolRelation(profile.schoolRelation ?? "");
+      setAcademicProgram(profile.academicProgram ?? "");
+      setSemester(profile.semester);
+      setCreatedAt(profile.profileCreatedAt ?? "");
     }).catch(() => {});
 
-    userService.getUsersProfile(accountId).then((p) => {
-      setFullName(p.fullName);
-      setIdentification(p.identification);
-      setBirthDate(p.birthDate);
-      setGender(p.gender);
-      setSchoolRelation(p.schoolRelation);
-      setAcademicProgram(p.academicProgram);
-      setSemester(p.semester);
-    }).catch(() => {});
-
-    userService.getActivity().then(setActivityLog).catch(() => {});
-
-    sportProfileService.getByUserId(accountId).then(async (sp) => {
-      setSportProfile(sp);
-      if (sp.photoId) {
-        const url = await loadSportProfilePhoto(sp.photoId);
+    sportProfileService.getByUserId(accountId).then(async (profile) => {
+      setSportProfile(profile);
+      if (profile?.photoId) {
+        const url = await sportProfileService.getPhotoUrl(profile.photoId);
         if (url) setProfilePhotoUrl(url);
       }
     }).catch(() => {});
+
+    userService.getActivity().then(setActivityLog).catch(() => {});
   }, [accountId]);
 
-  useEffect(() => {
-    return () => {
-      if (profilePhotoUrl) URL.revokeObjectURL(profilePhotoUrl);
-    };
-  }, [profilePhotoUrl]);
 
   // Info editor state
   const [infoDraft, setInfoDraft] = useState<InfoDraft>({ fullName: "", schoolRelation: "", academicProgram: "", semester: null });
@@ -217,24 +194,26 @@ export function Profile() {
   };
 
   const handleSaveInfo = async () => {
+    if (!accountId) return;
+    const payload: UpdateUsersProfileRequest = {
+      fullName: infoDraft.fullName,
+      identification,
+      birthDate,
+      gender,
+      schoolRelation: infoDraft.schoolRelation,
+      academicProgram: infoDraft.academicProgram,
+      semester: infoDraft.schoolRelation === "STUDENT" ? infoDraft.semester : null,
+    };
     try {
-      const updated = await userService.updateUsersProfile({
-        fullName: infoDraft.fullName,
-        identification,
-        birthDate,
-        gender,
-        schoolRelation: infoDraft.schoolRelation,
-        academicProgram: infoDraft.academicProgram,
-        semester: infoDraft.schoolRelation === "STUDENT" ? infoDraft.semester : null,
-      });
-      setFullName(updated.fullName);
-      setSchoolRelation(updated.schoolRelation);
-      setAcademicProgram(updated.academicProgram);
-      setSemester(updated.semester);
+      await userService.updateUsersProfile(payload);
+      setFullName(infoDraft.fullName);
+      setSchoolRelation(infoDraft.schoolRelation);
+      setAcademicProgram(infoDraft.academicProgram);
+      setSemester(infoDraft.schoolRelation === "STUDENT" ? infoDraft.semester : null);
       setShowInfoEditor(false);
       showFeedback("Información actualizada correctamente.");
     } catch {
-      showFeedback("No se pudo guardar la información.");
+      showFeedback("No se pudo guardar la información. Intenta nuevamente.");
     }
   };
 

@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Bell, Shield } from "lucide-react";
-import { useAuth } from "@/core/auth/AuthContext";
 import { invitationService, type InvitationDto } from "@/modules/users/services/invitationService";
 import { teamService } from "@/modules/teams/services/teamService";
+import { useAuth } from "@/core/auth/AuthContext";
 import { LogoutAction } from "@/core/components/LogoutAction";
 
 type InvitationItem = InvitationDto & { teamName: string };
@@ -23,25 +23,33 @@ export default function PendingInvitations() {
   const { accountId } = useAuth();
 
   const [invitations, setInvitations] = useState<InvitationItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [accepted, setAccepted] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accountId) return;
+    setIsLoading(true);
+    setError(null);
 
     invitationService.getByUserId(accountId)
-      .then(async (list) => {
-        const pending = list.filter((inv) => inv.status === "PENDING");
-        const withNames: InvitationItem[] = await Promise.all(
+      .then(async (invs) => {
+        const pending = invs.filter((inv) => inv.status === "PENDING");
+        const items = await Promise.all(
           pending.map(async (inv) => {
-            const team = await teamService.getTeam(inv.teamId).catch(() => null);
-            return { ...inv, teamName: team?.name ?? `Equipo #${inv.teamId}` };
+            try {
+              const team = await teamService.getTeam(inv.teamId);
+              return { ...inv, teamName: team.name };
+            } catch {
+              return { ...inv, teamName: `Equipo ${inv.teamId}` };
+            }
           })
         );
-        setInvitations(withNames);
+        setInvitations(items);
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => setError("No se pudieron cargar las invitaciones"))
+      .finally(() => setIsLoading(false));
   }, [accountId]);
 
   const showFeedback = (msg: string) => {
@@ -50,15 +58,25 @@ export default function PendingInvitations() {
   };
 
   const handleAccept = async (id: number, teamName: string) => {
-    await invitationService.accept(id).catch(() => {});
-    setInvitations((prev) => prev.filter((inv) => inv.id !== id));
-    showFeedback(`¡Has aceptado la invitación de "${teamName}"!`);
+    setAccepted(id);
+    try {
+      await invitationService.accept(id);
+      showFeedback(`¡Has aceptado la invitación de "${teamName}"!`);
+    } catch {
+      setAccepted(null);
+      showFeedback("No se pudo aceptar la invitación. Intenta nuevamente.");
+    }
   };
 
   const handleReject = async (id: number, teamName: string) => {
-    await invitationService.reject(id).catch(() => {});
-    setInvitations((prev) => prev.filter((inv) => inv.id !== id));
-    showFeedback(`Has rechazado la invitación de "${teamName}"`);
+    if (accepted !== null) return;
+    try {
+      await invitationService.reject(id);
+      setInvitations((prev) => prev.filter((inv) => inv.id !== id));
+      showFeedback(`Has rechazado la invitación de "${teamName}"`);
+    } catch {
+      showFeedback("No se pudo rechazar la invitación. Intenta nuevamente.");
+    }
   };
 
   return (
@@ -111,9 +129,13 @@ export default function PendingInvitations() {
       <div className="flex items-start justify-center px-6 lg:px-20 py-12 lg:py-20">
         <div className="w-full max-w-4xl">
 
-          {loading ? (
-            <div className="flex justify-center py-24">
-              <div className="w-8 h-8 rounded-full border-[3px] animate-spin" style={{ borderColor: P.primary, borderTopColor: "transparent" }} />
+          {isLoading ? (
+            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-12 text-center">
+              <p className="font-medium text-sm" style={{ color: P.default }}>Cargando invitaciones...</p>
+            </div>
+          ) : error ? (
+            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-12 text-center">
+              <p className="font-medium text-sm" style={{ color: P.primary }}>{error}</p>
             </div>
           ) : invitations.length > 0 ? (
             <>
@@ -139,16 +161,20 @@ export default function PendingInvitations() {
               </div>
 
               <ul className="flex flex-col gap-4">
-                {invitations.map((inv) => (
+                {invitations.map((inv) => {
+                  const isAccepted = accepted === inv.id;
+                  const isBlocked = accepted !== null && accepted !== inv.id;
+                  return (
                   <li key={inv.id}>
                     <article
-                      className="bg-white border border-[#e8e8ed] rounded-2xl p-5 hover:border-[#b81c1c]/20 transition-all shadow-sm hover:shadow-md"
+                      className="bg-white border border-[#e8e8ed] rounded-2xl p-5 transition-all shadow-sm"
+                      style={{ opacity: isBlocked ? 0.45 : 1 }}
                       aria-labelledby={`inv-title-${inv.id}`}
                     >
                       <div className="flex items-start gap-4">
                         <div
                           className="flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center"
-                          style={{ background: `linear-gradient(135deg, ${P.primary}, ${P.secondary})` }}
+                          style={{ background: isAccepted ? `linear-gradient(135deg, ${P.success}, #0fa854)` : `linear-gradient(135deg, ${P.primary}, ${P.secondary})` }}
                         >
                           <Shield className="w-7 h-7 text-white" />
                         </div>
@@ -163,11 +189,16 @@ export default function PendingInvitations() {
                                 {inv.teamName}
                               </h3>
                               <p className="font-medium text-sm mt-1" style={{ color: P.default }}>
-                                Te han invitado a unirte a este equipo
+                                {isAccepted ? "Invitación aceptada — ya perteneces a este equipo" : "Te han invitado a unirte a este equipo"}
                               </p>
                             </div>
-                            <span className="px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap" style={{ backgroundColor: "#DBEAFE", color: "#1E40AF" }}>
-                              Equipo
+                            <span
+                              className="px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                              style={isAccepted
+                                ? { backgroundColor: `${P.success}18`, color: P.success }
+                                : { backgroundColor: "#DBEAFE", color: "#1E40AF" }}
+                            >
+                              {isAccepted ? "✓ Aceptada" : "Equipo"}
                             </span>
                           </div>
 
@@ -176,33 +207,42 @@ export default function PendingInvitations() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <span>
-                              {new Date(inv.sentAt).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
+                              {new Date(
+                                Array.isArray(inv.sentAt)
+                                  ? (inv.sentAt as unknown as number[]).slice(0, 3).join("-")
+                                  : inv.sentAt
+                              ).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
                             </span>
                           </div>
 
-                          <div className="flex flex-col sm:flex-row gap-3">
-                            <button
-                              type="button"
-                              onClick={() => handleAccept(inv.id, inv.teamName)}
-                              className="flex-1 text-white px-5 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-                              style={{ backgroundColor: P.success }}
-                            >
-                              ✓ Aceptar
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleReject(inv.id, inv.teamName)}
-                              className="flex-1 px-5 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-                              style={{ backgroundColor: `${P.primary}12`, color: P.primary }}
-                            >
-                              ✕ Rechazar
-                            </button>
-                          </div>
+                          {!isAccepted && (
+                            <div className="flex flex-col sm:flex-row gap-3">
+                              <button
+                                type="button"
+                                onClick={() => !isBlocked && handleAccept(inv.id, inv.teamName)}
+                                disabled={isBlocked}
+                                className="flex-1 text-white px-5 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                                style={{ backgroundColor: isBlocked ? P.default : P.success, cursor: isBlocked ? "not-allowed" : "pointer" }}
+                              >
+                                ✓ Aceptar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => !isBlocked && handleReject(inv.id, inv.teamName)}
+                                disabled={isBlocked}
+                                className="flex-1 px-5 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                                style={{ backgroundColor: isBlocked ? `${P.default}12` : `${P.primary}12`, color: isBlocked ? P.default : P.primary, cursor: isBlocked ? "not-allowed" : "pointer" }}
+                              >
+                                ✕ Rechazar
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </article>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </>
           ) : (

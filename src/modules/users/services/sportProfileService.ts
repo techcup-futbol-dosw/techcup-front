@@ -1,4 +1,6 @@
 import { http } from "@/core/api/http";
+import { tokenStorage } from "@/core/auth/tokenStorage";
+import { env } from "@/core/config/env";
 
 export type SportProfileResponse = {
     id: number;
@@ -38,5 +40,15 @@ export const sportProfileService = {
 
     updateAvailability(profileId: number, available: boolean) {
         return http.patch<void>(`/api/sport-profiles/${profileId}/availability?available=${available}`);
+    },
+
+    async getPhotoUrl(photoId: string): Promise<string | null> {
+        const token = tokenStorage.getAccessToken();
+        const res = await fetch(`${env.apiBaseUrl}/api/sport-profiles/photos/${photoId}`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) return null;
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
     },
 };

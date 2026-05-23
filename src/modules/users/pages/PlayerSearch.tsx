@@ -1,20 +1,17 @@
 // src/modules/users/pages/PlayerSearch.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import logoTechcup from "@/assets/logo.png";
 import { playerService, type PlayerDto } from "@/modules/users/services/playerService";
-import { teamService } from "@/modules/teams/services/teamService";
 import { ApiError } from "@/core/api/http";
 import {
   ArrowLeft,
   Search,
   X,
   SlidersHorizontal,
-  Check,
   UserCheck,
   UserX,
-  Loader2,
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────
@@ -28,23 +25,12 @@ const P = {
   bg: "#F2F2F7",
 };
 
-// Mapeo de posición enum → metadatos visuales
 const positionMeta: Record<string, { label: string; bg: string; color: string }> = {
   GOALKEEPER: { label: "Portero",   bg: "rgba(0,102,254,0.10)",   color: "#0066FE" },
   DEFENDER:   { label: "Defensa",   bg: "rgba(23,201,100,0.10)",  color: "#17C964" },
   MIDFIELDER: { label: "Volante",   bg: "rgba(196,132,29,0.12)",  color: "#C4841D" },
   FORWARD:    { label: "Delantero", bg: "rgba(184,28,28,0.10)",   color: "#B81C1C" },
 };
-
-function getAge(birthDate: string | null): number | null {
-  if (!birthDate) return null;
-  const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
-}
 
 function highlight(text: string, query: string) {
   if (!query.trim()) return <span>{text}</span>;
@@ -65,32 +51,12 @@ function highlight(text: string, query: string) {
 }
 
 // ── PlayerCard ────────────────────────────────────
-function PlayerCard({
-  player,
-  query,
-  onAdd,
-  added,
-  dorsal,
-  active,
-  onDorsalChange,
-  onActiveChange,
-}: {
-  player: PlayerDto;
-  query: string;
-  onAdd: (id: number) => void;
-  added: boolean;
-  dorsal: string;
-  active: boolean;
-  onDorsalChange: (id: number, dorsal: string) => void;
-  onActiveChange: (id: number, active: boolean) => void;
-}) {
+function PlayerCard({ player, query }: { player: PlayerDto; query: string }) {
   const pos = player.position
     ? (positionMeta[player.position] ?? { label: player.position, bg: `${P.default}14`, color: P.default })
     : { label: "Sin posición", bg: `${P.default}14`, color: P.default };
 
   const avail = player.available ?? false;
-  const age = getAge(player.birthDate);
-  const dorsal_display = player.dorsalNumber ?? "—";
 
   return (
     <motion.article
@@ -105,14 +71,12 @@ function PlayerCard({
           : `0 0 0 1.5px ${P.primary}30, 0 4px 16px rgba(0,0,0,0.05)`,
       }}
     >
-      {/* Top row */}
       <div className="flex items-start gap-3">
-        {/* Dorsal avatar */}
         <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-xl"
+          className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 text-white text-2xl"
           style={{ background: `linear-gradient(135deg, ${P.primary}, ${P.secondary})`, fontWeight: 800 }}
         >
-          {dorsal_display}
+          {(player.fullName ?? "?")[0].toUpperCase()}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -136,16 +100,19 @@ function PlayerCard({
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: pos.bg, color: pos.color }}>
               {pos.label}
             </span>
-            {age != null && <span className="text-xs" style={{ color: P.default }}>{age} años</span>}
-            {age != null && <span className="text-xs" style={{ color: P.default }}>·</span>}
+            {player.academicProgram && (
+              <span className="text-xs" style={{ color: P.default }}>{player.academicProgram.replace(/_/g, " ")}</span>
+            )}
             {player.semester != null && (
-              <span className="text-xs" style={{ color: P.default }}>Sem. {player.semester}</span>
+              <>
+                <span className="text-xs" style={{ color: P.default }}>·</span>
+                <span className="text-xs" style={{ color: P.default }}>Sem. {player.semester}</span>
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {/* Info */}
       <div className="rounded-xl px-3 py-2.5 space-y-0.5" style={{ backgroundColor: P.bg }}>
         {player.identification && (
           <p className="text-xs" style={{ color: P.default, fontWeight: 600 }}>
@@ -156,52 +123,6 @@ function PlayerCard({
           <span style={{ color: P.textPrimary }}>{player.email}</span>
         </p>
       </div>
-
-      <div className="rounded-xl px-3 py-2.5 space-y-2" style={{ backgroundColor: "rgba(0,0,0,0.02)" }}>
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-xs" style={{ color: P.default, fontWeight: 700 }}>Dorsal *</label>
-          <input
-            type="number"
-            min={1}
-            max={99}
-            value={dorsal}
-            onChange={(e) => onDorsalChange(player.id, e.target.value)}
-            placeholder="1-99"
-            className="w-24 border rounded-lg px-2 py-1 text-xs text-center outline-none"
-            style={{ borderColor: "rgba(0,0,0,0.14)", color: P.textPrimary, fontWeight: 700 }}
-          />
-        </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>Rol</span>
-          <span className="text-xs px-2 py-1 rounded-full" style={{ backgroundColor: `${P.info}15`, color: P.info, fontWeight: 800 }}>PLAYER</span>
-        </div>
-        <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
-          <span className="text-xs" style={{ color: P.default, fontWeight: 700 }}>Activo</span>
-          <input
-            type="checkbox"
-            checked={active}
-            onChange={(e) => onActiveChange(player.id, e.target.checked)}
-            className="w-4 h-4 rounded"
-          />
-        </label>
-      </div>
-
-      {/* Add button */}
-      <motion.button
-        whileHover={!added ? { scale: 1.02 } : {}}
-        whileTap={!added ? { scale: 0.98 } : {}}
-        type="button"
-        onClick={() => !added && onAdd(player.id)}
-        className="w-full py-2.5 rounded-xl text-white text-sm flex items-center justify-center gap-2"
-        style={{
-          backgroundColor: added ? P.success : P.primary,
-          fontWeight: 700,
-          boxShadow: added ? `0 4px 14px ${P.success}35` : `0 4px 14px ${P.primary}35`,
-          cursor: added ? "default" : "pointer",
-        }}
-      >
-        {added ? <><Check style={{ width: 15, height: 15 }} /> Añadido al equipo</> : "Añadir Miembro"}
-      </motion.button>
     </motion.article>
   );
 }
@@ -209,20 +130,16 @@ function PlayerCard({
 // ── PlayerSearch ──────────────────────────────────
 export default function PlayerSearch() {
   const navigate = useNavigate();
-  const location = useLocation();
   const nameInputRef = useRef<HTMLInputElement | null>(null);
-  const teamContext = (location.state as { teamId?: number; teamName?: string } | null) ?? null;
 
   const [filters, setFilters] = useState({
     name: "", identification: "", position: "", age: "", gender: "", semester: "", onlyAvailable: false,
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [players, setPlayers] = useState<PlayerDto[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-  const [addedMembers, setAddedMembers] = useState<Set<number>>(new Set());
-  const [memberDrafts, setMemberDrafts] = useState<Record<number, { dorsal: string; active: boolean }>>({});
-  const [toast, setToast] = useState<string | null>(null);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const [debouncedName, setDebouncedName] = useState(filters.name);
   useEffect(() => {
@@ -231,28 +148,28 @@ export default function PlayerSearch() {
   }, [filters.name]);
 
   const fetchPlayers = useCallback(async () => {
-    setLoading(true);
-    setApiError(null);
+    setIsLoading(true);
+    setFetchError(null);
     try {
+      const semesterNum = filters.semester ? parseInt(filters.semester, 10) : undefined;
       const data = await playerService.search({
-        name:           debouncedName || undefined,
-        position:       filters.position || undefined,
-        gender:         filters.gender || undefined,
-        semester:       filters.semester ? parseInt(filters.semester, 10) : undefined,
-        age:            filters.age ? parseInt(filters.age, 10) : undefined,
+        name: debouncedName || undefined,
         identification: filters.identification || undefined,
-        available:      filters.onlyAvailable || undefined,
+        position: filters.position || undefined,
+        semester: semesterNum,
+        gender: filters.gender || undefined,
+        available: filters.onlyAvailable ? true : undefined,
       });
       setPlayers(data);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 403) {
-        setApiError("No tienes permisos para buscar jugadores. Esta función es exclusiva para capitanes y administradores.");
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 403) {
+        setFetchError("No tienes permisos para buscar jugadores. Se requiere rol de Capitán o Administrador.");
       } else {
-        setApiError("No se pudo cargar la lista de jugadores.");
+        setFetchError("No se pudieron cargar los jugadores. Intenta nuevamente.");
       }
       setPlayers([]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   }, [debouncedName, filters.position, filters.gender, filters.semester, filters.age, filters.identification, filters.onlyAvailable]);
 
@@ -269,12 +186,6 @@ export default function PlayerSearch() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2800);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const update = (field: keyof typeof filters, value: string | boolean) =>
     setFilters((prev) => ({ ...prev, [field]: value }));
 
@@ -285,41 +196,6 @@ export default function PlayerSearch() {
   const clearFilters = () => {
     setFilters({ name: "", identification: "", position: "", age: "", gender: "", semester: "", onlyAvailable: false });
     setShowAdvanced(false);
-  };
-
-  const updateMemberDraft = (id: number, patch: Partial<{ dorsal: string; active: boolean }>) => {
-    setMemberDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        dorsal: prev[id]?.dorsal ?? "",
-        active: prev[id]?.active ?? true,
-        ...patch,
-      },
-    }));
-  };
-
-  const handleAddMember = async (id: number) => {
-    const currentTeamId = teamContext?.teamId;
-    if (!currentTeamId) {
-      setToast("No se encontró tu equipo activo.");
-      return;
-    }
-
-    const draft = memberDrafts[id] ?? { dorsal: "", active: true };
-    const dorsal = Number(draft.dorsal);
-    if (!Number.isInteger(dorsal) || dorsal < 1 || dorsal > 99) {
-      setToast("Ingresa un dorsal válido entre 1 y 99.");
-      return;
-    }
-
-    const p = players.find((x) => x.id === id);
-    try {
-      await teamService.addMember(currentTeamId, { memberRole: "PLAYER", playerId: id, dorsal, active: draft.active });
-      setAddedMembers((prev) => new Set([...prev, id]));
-      if (p) setToast(`${p.fullName} añadido al equipo`);
-    } catch {
-      setToast("No se pudo añadir al jugador.");
-    }
   };
 
   const hasActiveFilters = filters.name || filters.identification || filters.position || filters.age || filters.gender || filters.semester || filters.onlyAvailable;
@@ -371,7 +247,7 @@ export default function PlayerSearch() {
             </h1>
           </div>
           <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>
-            Filtra por posición, edad, género, nombre o semestre. Presiona{" "}
+            Filtra por nombre, identificación, semestre o disponibilidad. Presiona{" "}
             <kbd className="px-1.5 py-0.5 rounded-md text-xs font-mono" style={{ backgroundColor: "rgba(0,0,0,0.08)", color: P.textPrimary }}>/</kbd>{" "}
             para enfocar la búsqueda.
           </p>
@@ -383,9 +259,7 @@ export default function PlayerSearch() {
           className="bg-white rounded-[20px] p-5 mb-6"
           style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05), 0 0 0 1px rgba(0,0,0,0.04)" }}
         >
-          {/* Main row */}
           <div className="flex flex-col sm:flex-row gap-3">
-            {/* Name */}
             <div className="flex-1">
               <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Nombre</label>
               <div className="relative">
@@ -401,19 +275,6 @@ export default function PlayerSearch() {
               </div>
             </div>
 
-            {/* Position */}
-            <div className="w-full sm:w-44">
-              <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Posición</label>
-              <select value={filters.position} onChange={(e) => update("position", e.target.value)} className="w-full border rounded-xl px-3 py-2.5 outline-none" style={inputStyle}>
-                <option value="">Todas</option>
-                <option value="GOALKEEPER">Portero</option>
-                <option value="DEFENDER">Defensa</option>
-                <option value="MIDFIELDER">Volante</option>
-                <option value="FORWARD">Delantero</option>
-              </select>
-            </div>
-
-            {/* Toggles + actions */}
             <div className="flex items-end gap-2 flex-wrap">
               <label className="flex items-center gap-1.5 cursor-pointer h-[42px]">
                 <div
@@ -450,7 +311,6 @@ export default function PlayerSearch() {
             </div>
           </div>
 
-          {/* Advanced */}
           <AnimatePresence>
             {showAdvanced && (
               <motion.div
@@ -458,19 +318,10 @@ export default function PlayerSearch() {
                 transition={{ duration: 0.25 }}
                 className="overflow-hidden"
               >
-                <div className="mt-4 pt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+                <div className="mt-4 pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" style={{ borderTop: "1px solid rgba(0,0,0,0.06)" }}>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Identificación</label>
                     <input value={filters.identification} onChange={(e) => update("identification", e.target.value)} placeholder="Ej: 1234567890" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
-                  </div>
-                  <div>
-                    <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Género</label>
-                    <select value={filters.gender} onChange={(e) => update("gender", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
-                      <option value="">Todos</option>
-                      <option value="MALE">Masculino</option>
-                      <option value="FEMALE">Femenino</option>
-                      <option value="OTHER">Otro</option>
-                    </select>
                   </div>
                   <div>
                     <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Semestre</label>
@@ -482,8 +333,13 @@ export default function PlayerSearch() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Edad</label>
-                    <input type="number" min="16" max="99" value={filters.age} onChange={(e) => update("age", e.target.value)} placeholder="Ej: 20" className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle} />
+                    <label className="block text-xs mb-1" style={{ fontWeight: 700, color: P.default }}>Género</label>
+                    <select value={filters.gender} onChange={(e) => update("gender", e.target.value)} className="w-full border rounded-xl px-3 py-2 outline-none" style={inputStyle}>
+                      <option value="">Todos</option>
+                      <option value="MALE">Masculino</option>
+                      <option value="FEMALE">Femenino</option>
+                      <option value="OTHER">Otro</option>
+                    </select>
                   </div>
                 </div>
               </motion.div>
@@ -492,42 +348,29 @@ export default function PlayerSearch() {
         </motion.section>
 
         {/* ── Results header ── */}
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="flex items-center justify-between mb-4">
-          <p className="text-sm" style={{ color: P.default, fontWeight: 600 }}>
-            {loading ? (
-              <span style={{ color: P.default }}>Buscando…</span>
-            ) : (
-              <><span style={{ color: P.textPrimary, fontWeight: 800 }}>{results.length}</span>{" "}
-              {results.length === 1 ? "jugador encontrado" : "jugadores encontrados"}</>
-            )}
-          </p>
-          {loading && <Loader2 style={{ width: 16, height: 16, color: P.secondary, animation: "spin 1s linear infinite" }} />}
-        </motion.div>
+        {!isLoading && !fetchError && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mb-4">
+            <p className="text-sm" style={{ color: P.default, fontWeight: 600 }}>
+              <span style={{ color: P.textPrimary, fontWeight: 800 }}>{results.length}</span>{" "}
+              {results.length === 1 ? "jugador encontrado" : "jugadores encontrados"}
+            </p>
+          </motion.div>
+        )}
 
         {/* ── Grid ── */}
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 style={{ width: 32, height: 32, color: P.primary, animation: "spin 1s linear infinite" }} />
-          </div>
-        ) : apiError ? (
+        {isLoading ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[20px] p-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-            <p className="text-sm" style={{ color: P.primary, fontWeight: 700 }}>{apiError}</p>
-            <button type="button" onClick={fetchPlayers} className="mt-3 text-xs px-4 py-2 rounded-xl" style={{ background: P.primary, color: "white", fontWeight: 700 }}>Reintentar</button>
+            <p className="text-sm" style={{ color: P.default, fontWeight: 500 }}>Cargando jugadores...</p>
+          </motion.div>
+        ) : fetchError ? (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[20px] p-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
+            <p className="text-sm" style={{ color: P.primary, fontWeight: 600 }}>{fetchError}</p>
           </motion.div>
         ) : results.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {results.map((player, idx) => (
-              <motion.div key={player.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.06, duration: 0.35 }}>
-                <PlayerCard
-                  player={player}
-                  query={debouncedName}
-                  onAdd={handleAddMember}
-                  added={addedMembers.has(player.id)}
-                  dorsal={memberDrafts[player.id]?.dorsal ?? ""}
-                  active={memberDrafts[player.id]?.active ?? true}
-                  onDorsalChange={(id, dorsal) => updateMemberDraft(id, { dorsal })}
-                  onActiveChange={(id, active) => updateMemberDraft(id, { active })}
-                />
+              <motion.div key={player.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04, duration: 0.35 }}>
+                <PlayerCard player={player} query={debouncedName} />
               </motion.div>
             ))}
           </div>
@@ -539,21 +382,6 @@ export default function PlayerSearch() {
           </motion.div>
         )}
       </main>
-
-      {/* ── Toast ── */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 40, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 40, scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 340, damping: 26 }}
-            className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl text-white"
-            style={{ backgroundColor: P.success, boxShadow: `0 12px 40px ${P.success}50` }}
-          >
-            <Check style={{ width: 18, height: 18 }} />
-            <span className="text-sm whitespace-nowrap" style={{ fontWeight: 700 }}>{toast}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
