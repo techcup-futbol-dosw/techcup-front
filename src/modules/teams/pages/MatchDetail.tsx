@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useParams, useNavigate } from "react-router";
-import { matchService, type MatchDetailDto } from "../services/matchService";
+import { matchService, type MatchDetailDto, type AssignedMatchDto } from "../services/matchService";
 import {
   ArrowLeft,
   Square,
@@ -19,7 +19,6 @@ import {
   ChevronRight,
   Coffee,
   Timer,
-  User,
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────
@@ -313,17 +312,23 @@ function Toast({ msg, color }: { msg: string; color: string }) {
   );
 }
 
-function ActorPickerModal({
+function PlayerNumberModal({
   title,
-  players,
-  onPick,
+  onConfirm,
   onClose,
 }: {
   title: string;
-  players: string[];
-  onPick: (player: string) => void;
+  onConfirm: (number: string) => void;
   onClose: () => void;
 }) {
+  const [value, setValue] = React.useState("");
+
+  const handleSubmit = () => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onConfirm(trimmed);
+  };
+
   return (
     <>
       <motion.div
@@ -341,37 +346,53 @@ function ActorPickerModal({
         className="fixed inset-0 z-50 flex items-center justify-center px-6 pointer-events-none"
       >
         <div
-          className="bg-white rounded-[20px] p-6 max-w-sm w-full pointer-events-auto"
+          className="bg-white rounded-[20px] p-6 max-w-xs w-full pointer-events-auto"
           style={{ boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}
         >
           <h3 className="text-base mb-1" style={{ fontWeight: 800, color: P.textPrimary }}>
-            Seleccionar jugador
+            Número del jugador
           </h3>
           <p className="text-xs mb-4" style={{ color: P.default, fontWeight: 500 }}>{title}</p>
 
-          <div className="space-y-2 mb-4">
-            {players.map((player) => (
-              <button
-                key={player}
-                onClick={() => onPick(player)}
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left"
-                style={{ borderColor: "rgba(0,0,0,0.08)" }}
-              >
-                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: `${P.info}14` }}>
-                  <User className="w-4 h-4" style={{ color: P.info }} />
-                </div>
-                <span style={{ fontSize: "0.84rem", fontWeight: 600, color: P.textPrimary }}>{player}</span>
-              </button>
-            ))}
-          </div>
+          <input
+            autoFocus
+            type="number"
+            inputMode="numeric"
+            placeholder="Ej: 10"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+            className="w-full px-4 py-3 rounded-xl border text-center mb-4"
+            style={{
+              borderColor: "rgba(0,0,0,0.12)",
+              fontSize: "1.5rem",
+              fontWeight: 800,
+              color: P.textPrimary,
+              outline: "none",
+            }}
+          />
 
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl"
-            style={{ backgroundColor: "rgba(0,0,0,0.06)", color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
-          >
-            Cancelar
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl"
+              style={{ backgroundColor: "rgba(0,0,0,0.06)", color: P.default, fontWeight: 700, fontSize: "0.82rem" }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!value.trim()}
+              className="flex-1 py-2.5 rounded-xl text-white"
+              style={{
+                backgroundColor: value.trim() ? P.primary : "rgba(0,0,0,0.12)",
+                fontWeight: 700,
+                fontSize: "0.82rem",
+              }}
+            >
+              Confirmar
+            </button>
+          </div>
         </div>
       </motion.div>
     </>
@@ -389,19 +410,44 @@ export function MatchDetail() {
 
   useEffect(() => {
     if (!id) return;
-    matchService.getById(Number(id))
-      .then(setMatch)
-      .catch(() => setMatch(null))
-      .finally(() => setLoadingMatch(false));
+
+    const historyState = window.history.state as { usr?: { match?: AssignedMatchDto } } | null;
+    const stateMatch = historyState?.usr?.match;
+    if (stateMatch) {
+      setMatch({
+        ...stateMatch,
+        playersA: [],
+        playersB: [],
+        homeScore: 0,
+        awayScore: 0,
+      });
+    }
+
+    setLoadingMatch(true);
+
+    matchService.getById(id)
+        .then(setMatch)
+        .catch((error) => {
+          console.error("Error cargando detalle del partido:", error);
+
+          if (!stateMatch) {
+            setMatch(null);
+          }
+        })
+        .finally(() => setLoadingMatch(false));
   }, [id]);
 
   const [matchState, setMatchState] = useState<MatchState>("no-iniciado");
 
-  // Sync matchState when match data arrives
+  // Sync matchState and score when match data arrives
   useEffect(() => {
-    if (match?.status === "en-curso") {
+    if (!match) return;
+    setScore({ a: match.homeScore, b: match.awayScore });
+    if (match.status === "en-curso") {
       setMatchState("en-curso");
       setTimerRunning(true);
+    } else if (match.status === "finalizado") {
+      setMatchState("finalizado");
     }
   }, [match]);
 
@@ -428,29 +474,6 @@ export function MatchDetail() {
   const [eventLog, setEventLog] = useState<EventLogItem[]>([]);
   const [actorPicker, setActorPicker] = useState<null | { team: TeamKey; type: EventType }>(null);
   const [recentActionsOpen, setRecentActionsOpen] = useState(false);
-
-  const teamActors: Record<TeamKey, string[]> = {
-    a: match?.playersA.map((p) => p.name) ?? [],
-    b: match?.playersB.map((p) => p.name) ?? [],
-  };
-
-  // Loading screen
-  if (loadingMatch) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
-        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Cargando partido...</p>
-      </div>
-    );
-  }
-
-  if (!match) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
-        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Partido no encontrado.</p>
-        <button onClick={() => navigate(-1)} style={{ color: "white", fontWeight: 600, fontSize: "0.85rem", textDecoration: "underline" }}>Volver</button>
-      </div>
-    );
-  }
 
   // Match timer (real seconds -> converts to minutes)
   useEffect(() => {
@@ -488,13 +511,32 @@ export function MatchDetail() {
     return () => { if (halfTimerRef.current) clearInterval(halfTimerRef.current); };
   }, [halfTimeOpen]);
 
+  // Loading screen
+  if (loadingMatch) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
+        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Cargando partido...</p>
+      </div>
+    );
+  }
+
+  if (!match) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: "linear-gradient(160deg, #5C0000 0%, #8B0000 45%, #B81C1C 100%)" }}>
+        <p style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.9rem", fontWeight: 500 }}>Partido no encontrado.</p>
+        <button onClick={() => navigate(-1)} style={{ color: "white", fontWeight: 600, fontSize: "0.85rem", textDecoration: "underline" }}>Volver</button>
+      </div>
+    );
+  }
+
   const showToast = (msg: string, color: string) => {
     setToast({ msg, color });
     setTimeout(() => setToast(null), 2200);
   };
 
-  const handleEmpezar = () => {
-    if (matchState === "no-iniciado") {
+  const handleEmpezar = async () => {
+    if (matchState === "no-iniciado" && match) {
+      try { await matchService.start(match.id); } catch { /* continúa localmente */ }
       setMatchState("en-curso");
     }
     setTimerRunning(true);
@@ -514,22 +556,32 @@ export function MatchDetail() {
     showToast("¡Reanudado! Segunda parte", P.success);
   };
 
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     setTimerRunning(false);
-    setMatchState("finalizado");
     setConfirmModal(null);
+    if (match) {
+      try { await matchService.finish(match.id); } catch { /* continúa localmente */ }
+    }
+    setMatchState("finalizado");
     showToast("Partido finalizado correctamente", P.primary);
   };
 
   const registerEvent = (team: TeamKey, type: EventType, actor: string) => {
-    if (matchState !== "en-curso") return;
-    const teamName = team === "a" ? (match?.teamA ?? "Equipo A") : (match?.teamB ?? "Equipo B");
+    if (matchState !== "en-curso" || !match) return;
+    const teamName = team === "a" ? match.teamA : match.teamB;
+    const teamId   = team === "a" ? match.teamA : match.teamB; // homeTeamId / awayTeamId
+    const currentMinute = minute;
+
     setCounters((prev) => ({
       ...prev,
       [team]: { ...prev[team], [type]: prev[team][type] + 1 },
     }));
     if (type === "gol") {
       setScore((prev) => ({ ...prev, [team]: prev[team] + 1 }));
+      matchService.registerGoal(match.id, teamId, actor, currentMinute).catch(() => {});
+    } else {
+      const cardType = type === "amarilla" ? "YELLOW_CARD" : "RED_CARD";
+      matchService.registerCard(match.id, teamId, actor, cardType, currentMinute).catch(() => {});
     }
     setEventLog((prev) => [
       {
@@ -595,11 +647,10 @@ export function MatchDetail() {
 
       <AnimatePresence>
         {actorPicker && (
-          <ActorPickerModal
+          <PlayerNumberModal
             title={`${eventDefs.find((d) => d.type === actorPicker.type)?.label} · ${actorPicker.team === "a" ? match.teamA : match.teamB}`}
-            players={teamActors[actorPicker.team]}
-            onPick={(actor) => {
-              registerEvent(actorPicker.team, actorPicker.type, actor);
+            onConfirm={(number) => {
+              registerEvent(actorPicker.team, actorPicker.type, number);
               setActorPicker(null);
             }}
             onClose={() => setActorPicker(null)}

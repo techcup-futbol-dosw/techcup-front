@@ -1,6 +1,5 @@
 import { http } from "@/core/api/http";
-import { sanitizeFileName } from "@/core/utils/fileutils";
-
+import { tokenStorage } from "@/core/auth/tokenStorage";
 // ── Backend raw types (lo que devuelve el microservicio) ───────────────────
 
 type BackendInscription = {
@@ -212,6 +211,11 @@ function buildUpdatePayload(
     return payload;
 }
 
+interface UploadResponse {
+    url: string;
+    fileName: string;
+}
+
 // ── Service ────────────────────────────────────────────────────────────────
 
 export const tournamentService = {
@@ -280,15 +284,15 @@ export const tournamentService = {
         return http.get<CourtDto[]>(`/api/soccerfields/tournament/${tournamentId}`);
     },
 
-    uploadRegulation(file: File) {
-        const sanitizedName = sanitizeFileName(file.name);
-        const renamedFile = new File([file], sanitizedName, { type: file.type });
-        const body = new FormData();
-        body.append("file", renamedFile);
-        return http.post<{ url: string; fileName: string }>(
-            "/api/tournaments/regulation/upload",
-            body
-        );
+    uploadRegulation: async (file: File): Promise<{ url: string; fileName: string }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    try {   
+        return http.post<{ url: string; fileName: string }>("/api/tournaments/regulation/upload", formData);
+    } catch (error: any) {
+        console.error("Error subiendo PDF:", error?.response?.data || error);
+        throw error;
+    }
     },
 
     createMatch(tournamentId: number, payload: CreateMatchRequest) {
