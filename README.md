@@ -1,7 +1,7 @@
-# TECHCUP FÚTBOL — Frontend
+# TECHCUP FÚTBOL
 
 > [!IMPORTANT]
-> Este repositorio contiene el **FrontEnd** de la plataforma TechCup Fútbol.
+> Este repositorio contiene el *FrontEnd* de la plataforma.
 
 > [!NOTE]
 > Interfaz web que permite a organizadores, capitanes, árbitros y jugadores interactuar con la plataforma: gestionar torneos, equipos, partidos, resultados y perfiles deportivos desde un solo lugar.
