@@ -23,33 +23,29 @@ export default function PendingInvitations() {
   const { accountId } = useAuth();
 
   const [invitations, setInvitations] = useState<InvitationItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [accepted, setAccepted] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accountId) return;
     setIsLoading(true);
-    setError(null);
-
-    invitationService.getByUserId(accountId)
-      .then(async (invs) => {
-        const pending = invs.filter((inv) => inv.status === "PENDING");
-        const items = await Promise.all(
-          pending.map(async (inv) => {
-            try {
-              const team = await teamService.getTeam(inv.teamId);
-              return { ...inv, teamName: team.name };
-            } catch {
-              return { ...inv, teamName: `Equipo ${inv.teamId}` };
-            }
-          })
-        );
-        setInvitations(items);
-      })
-      .catch(() => setError("No se pudieron cargar las invitaciones"))
-      .finally(() => setIsLoading(false));
+    invitationService.getByUserId(accountId).then((data) => {
+      const pending = data.filter((inv) => inv.status === "PENDING");
+      return Promise.all(
+        pending.map((inv) =>
+          teamService.getTeam(inv.teamId)
+            .then((team) => ({ ...inv, teamName: team.name }))
+            .catch(() => ({ ...inv, teamName: `Equipo #${inv.teamId}` }))
+        )
+      );
+    }).then((withNames) => {
+      setInvitations(withNames);
+    }).catch(() => {
+      setInvitations([]);
+    }).finally(() => {
+      setIsLoading(false);
+    });
   }, [accountId]);
 
   const showFeedback = (msg: string) => {
@@ -57,26 +53,23 @@ export default function PendingInvitations() {
     setTimeout(() => setFeedback(null), 4000);
   };
 
-  const handleAccept = async (id: number, teamName: string) => {
-    setAccepted(id);
-    try {
-      await invitationService.accept(id);
+  const handleAccept = (id: number, teamName: string) => {
+    invitationService.accept(id).then(() => {
+      setAccepted(id);
       showFeedback(`¡Has aceptado la invitación de "${teamName}"!`);
-    } catch {
-      setAccepted(null);
-      showFeedback("No se pudo aceptar la invitación. Intenta nuevamente.");
-    }
+    }).catch(() => {
+      showFeedback("Error al aceptar la invitación. Intenta de nuevo.");
+    });
   };
 
-  const handleReject = async (id: number, teamName: string) => {
+  const handleReject = (id: number, teamName: string) => {
     if (accepted !== null) return;
-    try {
-      await invitationService.reject(id);
+    invitationService.reject(id).then(() => {
       setInvitations((prev) => prev.filter((inv) => inv.id !== id));
       showFeedback(`Has rechazado la invitación de "${teamName}"`);
-    } catch {
-      showFeedback("No se pudo rechazar la invitación. Intenta nuevamente.");
-    }
+    }).catch(() => {
+      showFeedback("Error al rechazar la invitación. Intenta de nuevo.");
+    });
   };
 
   return (
@@ -132,10 +125,6 @@ export default function PendingInvitations() {
           {isLoading ? (
             <div className="bg-white rounded-2xl border border-[#e8e8ed] p-12 text-center">
               <p className="font-medium text-sm" style={{ color: P.default }}>Cargando invitaciones...</p>
-            </div>
-          ) : error ? (
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-12 text-center">
-              <p className="font-medium text-sm" style={{ color: P.primary }}>{error}</p>
             </div>
           ) : invitations.length > 0 ? (
             <>
@@ -207,11 +196,7 @@ export default function PendingInvitations() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <span>
-                              {new Date(
-                                Array.isArray(inv.sentAt)
-                                  ? (inv.sentAt as unknown as number[]).slice(0, 3).join("-")
-                                  : inv.sentAt
-                              ).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
+                              {new Date(inv.sentAt).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" })}
                             </span>
                           </div>
 

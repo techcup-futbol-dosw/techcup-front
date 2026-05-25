@@ -8,7 +8,7 @@ import { useState, useEffect, useRef, SyntheticEvent } from "react";
 import { ArrowLeft, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import logoTechcup from "@/assets/logo.png";
 import { useAuth } from "@/core/auth/AuthContext";
-import { sportProfileService, type SportProfileRequest } from "@/modules/users/services/sportProfileService";
+import { sportProfileService } from "@/modules/users/services/sportProfileService";
 
 interface SportsProfileData {
     posicion: string;
@@ -126,7 +126,6 @@ function getFormValidationStatus(
 ): boolean {
     const hasErrors = Object.values(errors).some((e) => e !== "");
     return !!(
-        profileData.foto &&
         profileData.posicion &&
         profileData.dorsal &&
         profileData.disponible !== null &&
@@ -272,10 +271,6 @@ function validateFormLogic(
 ): boolean {
     const newErrors: Record<string, string> = {};
 
-    if (!profileData.foto) {
-        newErrors.foto = "Sube una foto de perfil para continuar";
-    }
-
     if (!profileData.posicion) {
         newErrors.posicion = "Selecciona una posición para continuar";
     }
@@ -331,6 +326,11 @@ export function SportsProfile() {
                 foto: null,
                 disponible: profile.available,
             });
+            if (profile.photoId) {
+                sportProfileService.getPhotoUrl(profile.photoId).then((url) => {
+                    if (url) setPreviewImage(url);
+                }).catch(() => {});
+            }
         }).catch(() => {});
     }, [accountId]);
 
@@ -394,40 +394,39 @@ export function SportsProfile() {
         showFeedback("Cambios descartados", "success");
     };
 
-    const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
+    const handleSubmit = (e: SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!validateFormLogic(profileData, setErrors)) {
             showFeedback("Completa los datos requeridos antes de guardar", "error");
             return;
         }
         if (!accountId) {
-            showFeedback("No se pudo identificar tu sesión. Vuelve a iniciar sesión", "error");
+            showFeedback("No se pudo identificar tu sesión. Intenta de nuevo.", "error");
             return;
         }
 
         setIsSaving(true);
-        try {
-            const request: SportProfileRequest = {
-                position: profileData.posicion,
-                dorsalNumber: parseInt(profileData.dorsal, 10),
-                available: profileData.disponible ?? false,
-            };
+        const data = {
+            position: profileData.posicion,
+            dorsalNumber: parseInt(profileData.dorsal, 10),
+            available: profileData.disponible ?? false,
+        };
 
-            if (existingProfileId) {
-                await sportProfileService.update(existingProfileId, request, photoFile);
-            } else {
-                await sportProfileService.create(accountId, request, photoFile);
-            }
+        const apiCall = existingProfileId
+            ? sportProfileService.update(existingProfileId, data, photoFile)
+            : sportProfileService.create(accountId, data, photoFile);
 
+        apiCall.then((sp) => {
+            if (!existingProfileId) setExistingProfileId(sp.id);
             showFeedback("¡Perfil deportivo guardado exitosamente!", "success");
             globalThis.setTimeout(() => {
                 setIsSaving(false);
                 navigate(dashboardPath);
             }, 1600);
-        } catch {
+        }).catch(() => {
+            showFeedback("Error al guardar el perfil. Intenta de nuevo.", "error");
             setIsSaving(false);
-            showFeedback("No se pudo guardar el perfil. Intenta nuevamente.", "error");
-        }
+        });
     };
 
     // ─── COMPUTED VALUES ───

@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
-import { userService, type ActivityItemDto, type UpdateUsersProfileRequest } from "@/modules/users/services/userService";
+import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
 import { sportProfileService, type SportProfileResponse } from "@/modules/users/services/sportProfileService";
 import { RELATIONS, PROGRAMS } from "@/core/constants/academicData";
 import {
@@ -132,34 +132,38 @@ export function Profile() {
 
   // Sport profile data
   const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string>("");
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
 
   useEffect(() => {
     if (!accountId) return;
 
-    userService.getUsersProfile(accountId).then((profile) => {
-      setEmail(profile.email);
-      setFullName(profile.fullName);
-      setIdentification(profile.identification ?? "");
-      setBirthDate(profile.birthDate ?? "");
-      setGender(profile.gender ?? "");
-      setSchoolRelation(profile.schoolRelation ?? "");
-      setAcademicProgram(profile.academicProgram ?? "");
-      setSemester(profile.semester);
-      setCreatedAt(profile.profileCreatedAt ?? "");
+    userService.getMe(accountId).then((account) => {
+      setEmail(account.email);
+      setCreatedAt(account.createdAt);
     }).catch(() => {});
 
-    sportProfileService.getByUserId(accountId).then(async (profile) => {
-      setSportProfile(profile);
-      if (profile?.photoId) {
-        const url = await sportProfileService.getPhotoUrl(profile.photoId);
-        if (url) setProfilePhotoUrl(url);
+    userService.getUsersProfile(accountId).then((profile) => {
+      setFullName(profile.fullName);
+      setSchoolRelation(profile.schoolRelation);
+      setAcademicProgram(profile.academicProgram);
+      setSemester(profile.semester);
+      setIdentification(profile.identification);
+      setBirthDate(profile.birthDate);
+      setGender(profile.gender);
+    }).catch(() => {});
+
+    sportProfileService.getByUserId(accountId).then((sp) => {
+      setSportProfile(sp);
+      if (sp.photoId) {
+        sportProfileService.getPhotoUrl(sp.photoId).then((url) => {
+          if (url) setProfilePhotoUrl(url);
+        }).catch(() => {});
       }
     }).catch(() => {});
 
-    userService.getActivity().then(setActivityLog).catch(() => {});
+    setActivityLog([]);
   }, [accountId]);
 
 
@@ -193,9 +197,8 @@ export function Profile() {
     setShowInfoEditor(true);
   };
 
-  const handleSaveInfo = async () => {
-    if (!accountId) return;
-    const payload: UpdateUsersProfileRequest = {
+  const handleSaveInfo = () => {
+    userService.updateUsersProfile({
       fullName: infoDraft.fullName,
       identification,
       birthDate,
@@ -203,18 +206,16 @@ export function Profile() {
       schoolRelation: infoDraft.schoolRelation,
       academicProgram: infoDraft.academicProgram,
       semester: infoDraft.schoolRelation === "STUDENT" ? infoDraft.semester : null,
-    };
-    try {
-      await userService.updateUsersProfile(payload);
+    }).then(() => {
       setFullName(infoDraft.fullName);
       setSchoolRelation(infoDraft.schoolRelation);
       setAcademicProgram(infoDraft.academicProgram);
       setSemester(infoDraft.schoolRelation === "STUDENT" ? infoDraft.semester : null);
       setShowInfoEditor(false);
       showFeedback("Información actualizada correctamente.");
-    } catch {
-      showFeedback("No se pudo guardar la información. Intenta nuevamente.");
-    }
+    }).catch(() => {
+      showFeedback("Error al guardar los cambios. Intenta de nuevo.");
+    });
   };
 
   const handleActivityMouseEnter = (id: string) => {

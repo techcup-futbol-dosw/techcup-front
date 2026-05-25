@@ -137,7 +137,6 @@ export default function PlayerSearch() {
   });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [players, setPlayers] = useState<PlayerDto[]>([]);
-
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -147,30 +146,30 @@ export default function PlayerSearch() {
     return () => clearTimeout(t);
   }, [filters.name]);
 
-  const fetchPlayers = useCallback(async () => {
+  const fetchPlayers = useCallback(() => {
     setIsLoading(true);
     setFetchError(null);
-    try {
-      const semesterNum = filters.semester ? parseInt(filters.semester, 10) : undefined;
-      const data = await playerService.search({
-        name: debouncedName || undefined,
-        identification: filters.identification || undefined,
-        position: filters.position || undefined,
-        semester: semesterNum,
-        gender: filters.gender || undefined,
-        available: filters.onlyAvailable ? true : undefined,
-      });
+
+    const searchFilters: Parameters<typeof playerService.search>[0] = {};
+    if (debouncedName.trim()) searchFilters.name = debouncedName.trim();
+    if (filters.position) searchFilters.position = filters.position;
+    if (filters.gender) searchFilters.gender = filters.gender;
+    if (filters.semester) searchFilters.semester = Number.parseInt(filters.semester, 10);
+    if (filters.identification.trim()) searchFilters.identification = filters.identification.trim();
+    if (filters.onlyAvailable) searchFilters.available = true;
+
+    playerService.search(searchFilters).then((data) => {
       setPlayers(data);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 403) {
-        setFetchError("No tienes permisos para buscar jugadores. Se requiere rol de Capitán o Administrador.");
+    }).catch((err) => {
+      if (err instanceof ApiError && err.status === 403) {
+        setFetchError("No tienes permiso para buscar jugadores. Solo capitanes y administradores pueden usar esta función.");
       } else {
-        setFetchError("No se pudieron cargar los jugadores. Intenta nuevamente.");
+        setFetchError("Error al cargar los jugadores. Intenta de nuevo.");
       }
       setPlayers([]);
-    } finally {
+    }).finally(() => {
       setIsLoading(false);
-    }
+    });
   }, [debouncedName, filters.position, filters.gender, filters.semester, filters.age, filters.identification, filters.onlyAvailable]);
 
   useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
@@ -348,23 +347,22 @@ export default function PlayerSearch() {
         </motion.section>
 
         {/* ── Results header ── */}
-        {!isLoading && !fetchError && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mb-4">
-            <p className="text-sm" style={{ color: P.default, fontWeight: 600 }}>
-              <span style={{ color: P.textPrimary, fontWeight: 800 }}>{results.length}</span>{" "}
-              {results.length === 1 ? "jugador encontrado" : "jugadores encontrados"}
-            </p>
-          </motion.div>
-        )}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="mb-4">
+          <p className="text-sm" style={{ color: P.default, fontWeight: 600 }}>
+            <span style={{ color: P.textPrimary, fontWeight: 800 }}>{results.length}</span>{" "}
+            {results.length === 1 ? "jugador encontrado" : "jugadores encontrados"}
+          </p>
+        </motion.div>
 
         {/* ── Grid ── */}
         {isLoading ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[20px] p-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-            <p className="text-sm" style={{ color: P.default, fontWeight: 500 }}>Cargando jugadores...</p>
+            <p className="text-sm" style={{ color: P.default, fontWeight: 600 }}>Buscando jugadores...</p>
           </motion.div>
         ) : fetchError ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white rounded-[20px] p-10 text-center" style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.05)" }}>
-            <p className="text-sm" style={{ color: P.primary, fontWeight: 600 }}>{fetchError}</p>
+            <p className="text-sm" style={{ color: P.primary, fontWeight: 700 }}>Sin acceso</p>
+            <p className="text-xs mt-1" style={{ color: P.default, fontWeight: 500 }}>{fetchError}</p>
           </motion.div>
         ) : results.length > 0 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
