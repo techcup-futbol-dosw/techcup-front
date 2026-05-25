@@ -1,8 +1,9 @@
-﻿import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useNavigate } from "react-router";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/core/auth/AuthContext";
 import { userService, type ActivityItemDto } from "@/modules/users/services/userService";
+import { sportProfileService, type SportProfileResponse } from "@/modules/users/services/sportProfileService";
 import {
   ArrowLeft,
   Edit2,
@@ -27,6 +28,13 @@ const P = {
 };
 
 type Tab = "overview" | "settings" | "activity";
+
+const POSITION_LABELS: Record<string, string> = {
+  GOALKEEPER: "Portero",
+  DEFENDER: "Defensa",
+  MIDFIELDER: "Volante",
+  FORWARD: "Delantero",
+};
 
 function SectionLabel({ text, color }: { text: string; color: string }) {
   return (
@@ -77,21 +85,18 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
   );
 }
 
-// Helper: Determinar dashboard path
 const getDashboardPath = (context: string): string => {
   if (context === "organizer") return "/dashboard-organizer";
   if (context === "arbitro") return "/dashboard-arbitro";
   return "/dashboard";
 };
 
-// Helper: Determinar color por contexto
 const getBadgeColor = (context: string): string => {
   if (context === "organizer") return P.success;
   if (context === "arbitro") return P.secondary;
   return P.primary;
 };
 
-// Helper: Determinar label por contexto
 const getBadgeLabel = (context: string): string => {
   if (context === "organizer") return "Organizador";
   if (context === "arbitro") return "Árbitro";
@@ -109,6 +114,8 @@ export function Profile() {
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [activityLog, setActivityLog] = useState<ActivityItemDto[]>([]);
+  const [sportProfile, setSportProfile] = useState<SportProfileResponse | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!accountId) return;
@@ -120,6 +127,14 @@ export function Profile() {
       setBioDraft(u.bio ?? "");
     }).catch(() => {});
     userService.getActivity().then(setActivityLog).catch(() => {});
+    sportProfileService.getByUserId(accountId).then((sp) => {
+      setSportProfile(sp);
+      if (sp.photoId) {
+        sportProfileService.getPhotoUrl(sp.photoId).then((url) => {
+          if (url) setProfilePhotoUrl(url);
+        }).catch(() => {});
+      }
+    }).catch(() => {});
   }, [accountId]);
 
   const [bioDraft, setBioDraft] = useState(bio);
@@ -198,19 +213,14 @@ export function Profile() {
     }
   };
 
-  // Handlers para elemento interactivo de actividad
   const handleActivityMouseEnter = (id: string) => {
     const element = activityRefs.current[id];
-    if (element) {
-      element.style.backgroundColor = P.bg;
-    }
+    if (element) element.style.backgroundColor = P.bg;
   };
 
   const handleActivityMouseLeave = (id: string) => {
     const element = activityRefs.current[id];
-    if (element) {
-      element.style.backgroundColor = "transparent";
-    }
+    if (element) element.style.backgroundColor = "transparent";
   };
 
   const handleActivityKeyDown = (e: React.KeyboardEvent, id: string) => {
@@ -220,19 +230,14 @@ export function Profile() {
     }
   };
 
-  const handleActivityTouchStart = (id: string) => {
-    handleActivityMouseEnter(id);
-  };
+  const handleActivityTouchStart = (id: string) => handleActivityMouseEnter(id);
+  const handleActivityTouchEnd   = (id: string) => setTimeout(() => handleActivityMouseLeave(id), 200);
 
-  const handleActivityTouchEnd = (id: string) => {
-    setTimeout(() => {
-      handleActivityMouseLeave(id);
-    }, 200);
-  };
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
 
   const tabs: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
-    { id: "overview", label: "Resumen", icon: LayoutGrid },
-    { id: "settings", label: "Ajustes", icon: Settings },
+    { id: "overview", label: "Resumen",   icon: LayoutGrid },
+    { id: "settings", label: "Ajustes",   icon: Settings },
     { id: "activity", label: "Actividad", icon: Activity },
   ];
 
@@ -271,6 +276,7 @@ export function Profile() {
       </motion.header>
 
       <main className="max-w-3xl mx-auto px-6 sm:px-10 pt-10 pb-16 space-y-6">
+        {/* ── Profile card ── */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -280,37 +286,64 @@ export function Profile() {
         >
           <div className="flex items-start gap-4">
             <div className="relative flex-shrink-0">
-              <img
-                src="https://images.unsplash.com/photo-1759701546662-b79f5d881124?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx5b3VuZyUyMG1hbiUyMGF0aGxldGUlMjBwb3J0cmFpdCUyMHByb2Zlc3Npb25hbHxlbnwxfHx8fDE3NzI2MzUxNDB8MA&ixlib=rb-4.1.0&q=80&w=400"
-                alt="Alex Rivers"
-                className="w-16 h-16 rounded-2xl object-cover"
-                style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
-              />
-              <div
-                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
-                style={{ backgroundColor: P.success }}
-              />
+              {profilePhotoUrl ? (
+                <img
+                  src={profilePhotoUrl}
+                  alt={fullName || "Foto de perfil"}
+                  className="w-16 h-16 rounded-2xl object-cover"
+                  style={{ boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}
+                />
+              ) : (
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  style={{ backgroundColor: `${P.primary}14`, boxShadow: "0 4px 14px rgba(0,0,0,0.08)" }}
+                >
+                  {fullName ? (
+                    <span style={{ fontSize: "1.6rem", fontWeight: 800, color: P.primary }}>
+                      {fullName.charAt(0).toUpperCase()}
+                    </span>
+                  ) : (
+                    <User style={{ width: 28, height: 28, color: P.primary }} />
+                  )}
+                </div>
+              )}
+              {sportProfile?.available && (
+                <div
+                  className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white"
+                  style={{ backgroundColor: P.success }}
+                />
+              )}
             </div>
 
             <div className="flex-1 min-w-0">
               <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: P.textPrimary, letterSpacing: "-0.02em" }}>
-                Alex Rivers
+                {fullName || "Cargando..."}
               </h2>
               <p className="mt-0.5" style={{ fontSize: "0.82rem", color: P.default, fontWeight: 500 }}>
-                alex.rivers@techcup.io
+                {email}
               </p>
               <div className="flex flex-wrap gap-2 mt-2.5">
-                <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                  PRO ATHLETE
-                </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
-                  TECHLEAD ELITE
-                </span>
+                {sportProfile?.position && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.secondary}14`, color: P.secondary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                    {POSITION_LABELS[sportProfile.position] ?? sportProfile.position}
+                  </span>
+                )}
+                {sportProfile?.dorsalNumber != null && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.primary}12`, color: P.primary, fontWeight: 700, letterSpacing: "0.05em" }}>
+                    #{String(sportProfile.dorsalNumber).padStart(2, "0")}
+                  </span>
+                )}
+                {!sportProfile && (
+                  <span className="text-xs px-2.5 py-0.5 rounded-full" style={{ backgroundColor: `${P.default}14`, color: P.default, fontWeight: 600, letterSpacing: "0.05em" }}>
+                    Sin perfil deportivo
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </motion.div>
 
+        {/* ── Tabs ── */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -328,11 +361,7 @@ export function Profile() {
                   onClick={() => setActiveTab(tab.id)}
                   type="button"
                   className="flex-1 flex items-center justify-center gap-2 py-3.5 relative transition-all duration-200"
-                  style={{
-                    fontWeight: isActive ? 700 : 500,
-                    color: isActive ? P.textPrimary : P.default,
-                    fontSize: "0.82rem",
-                  }}
+                  style={{ fontWeight: isActive ? 700 : 500, color: isActive ? P.textPrimary : P.default, fontSize: "0.82rem" }}
                 >
                   <Icon style={{ width: 15, height: 15 }} />
                   {tab.label}
@@ -349,6 +378,7 @@ export function Profile() {
           </div>
 
           <AnimatePresence mode="wait">
+            {/* ── Overview ── */}
             {activeTab === "overview" && (
               <motion.div
                 key="overview"
@@ -358,29 +388,41 @@ export function Profile() {
                 transition={{ duration: 0.22 }}
                 className="p-6"
               >
-                <SectionLabel text="Estadísticas" color={P.primary} />
-                <div className="grid grid-cols-2 gap-3 mb-6">
-                  {[
-                    { id: "stat-1", label: "Partidos Jugados", value: "42", color: P.primary },
-                    { id: "stat-2", label: "Victorias", value: "28", color: P.success },
-                    { id: "stat-3", label: "Torneos", value: "8", color: P.secondary },
-                    { id: "stat-4", label: "Puntos Totales", value: "2,450", color: P.info },
-                  ].map((s) => (
-                    <div key={s.id} className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
-                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: s.color, letterSpacing: "-0.02em" }}>
-                        {s.value}
+                <SectionLabel text="Perfil Deportivo" color={P.primary} />
+                {sportProfile ? (
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <p style={{ fontSize: "1.1rem", fontWeight: 800, color: P.secondary, letterSpacing: "-0.02em" }}>
+                        {sportProfile.position ? (POSITION_LABELS[sportProfile.position] ?? sportProfile.position) : "—"}
                       </p>
-                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>
-                        {s.label}
-                      </p>
+                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Posición</p>
                     </div>
-                  ))}
-                </div>
+                    <div className="text-center p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <p style={{ fontSize: "1.5rem", fontWeight: 800, color: P.primary, letterSpacing: "-0.02em" }}>
+                        {sportProfile.dorsalNumber != null ? String(sportProfile.dorsalNumber).padStart(2, "0") : "—"}
+                      </p>
+                      <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Dorsal</p>
+                    </div>
+                    <div className="col-span-2 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <div>
+                        <p style={{ fontSize: "0.88rem", fontWeight: 700, color: sportProfile.available ? P.success : P.default }}>
+                          {sportProfile.available ? "Disponible para jugar" : "No disponible"}
+                        </p>
+                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Estado de disponibilidad</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-6 flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                    <p style={{ fontSize: "0.85rem", color: P.default, fontWeight: 500 }}>Sin perfil deportivo configurado.</p>
+                  </div>
+                )}
                 <SectionLabel text="Biografía" color={P.default} />
-                <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio}</p>
+                <p style={{ fontSize: "0.88rem", color: P.default, fontWeight: 500, lineHeight: 1.65 }}>{bio || "—"}</p>
               </motion.div>
             )}
 
+            {/* ── Settings ── */}
             {activeTab === "settings" && (
               <motion.div
                 key="settings"
@@ -403,7 +445,7 @@ export function Profile() {
                       style={{ fontSize: "0.78rem", fontWeight: 600, color: P.secondary }}
                     >
                       <Edit2 style={{ width: 12, height: 12 }} />
-                      Editar
+                      Editar bio
                     </button>
                   </div>
 
@@ -423,15 +465,8 @@ export function Profile() {
                             value={f.value}
                             readOnly
                             disabled
-                            className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200"
-                            style={{
-                              fontSize: "0.88rem",
-                              fontWeight: 500,
-                              backgroundColor: P.bg,
-                              border: "1.5px solid transparent",
-                              color: P.default,
-                              cursor: "not-allowed",
-                            }}
+                            className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                            style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.default, cursor: "not-allowed" }}
                           />
                         </div>
                       ))}
@@ -447,15 +482,8 @@ export function Profile() {
                         value={email}
                         readOnly
                         disabled
-                        className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200"
-                        style={{
-                          fontSize: "0.88rem",
-                          fontWeight: 500,
-                          backgroundColor: P.bg,
-                          border: "1.5px solid transparent",
-                          color: P.default,
-                          cursor: "not-allowed",
-                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.default, cursor: "not-allowed" }}
                       />
                     </div>
 
@@ -469,16 +497,8 @@ export function Profile() {
                         readOnly
                         disabled
                         rows={3}
-                        className="w-full px-3.5 py-2.5 rounded-xl outline-none transition-all duration-200 resize-none"
-                        style={{
-                          fontSize: "0.88rem",
-                          fontWeight: 500,
-                          backgroundColor: P.bg,
-                          border: "1.5px solid transparent",
-                          color: P.textPrimary,
-                          cursor: "not-allowed",
-                          opacity: 0.75,
-                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl outline-none resize-none"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, cursor: "not-allowed", opacity: 0.75 }}
                       />
                     </div>
                   </div>
@@ -489,41 +509,29 @@ export function Profile() {
                     <SectionLabel text="Seguridad y Acceso" color={P.info} />
                   </div>
                   <div className="space-y-3">
-                    {[
-                      { id: "sec-pass", icon: KeyRound, label: "Contraseña", sub: "Actualizada hace 3 meses", color: P.info, action: "Cambiar" },
-                    ].map((item) => {
-                      const Icon = item.icon;
-                      return (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-3 p-3.5 rounded-2xl"
-                          style={{ backgroundColor: P.bg }}
-                        >
-                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${item.color}12` }}>
-                            <Icon style={{ width: 16, height: 16, color: item.color }} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.label}</p>
-                            <p style={{ fontSize: "0.75rem", color: item.color === P.success ? item.color : P.default, fontWeight: 500 }}>
-                              {item.sub}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowPasswordModal(true)}
-                            className="px-3 py-1.5 rounded-xl bg-white flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
-                            style={{ fontSize: "0.75rem", fontWeight: 600, color: P.textPrimary, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
-                          >
-                            {item.action}
-                          </button>
-                        </div>
-                      );
-                    })}
+                    <div className="flex items-center gap-3 p-3.5 rounded-2xl" style={{ backgroundColor: P.bg }}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${P.info}12` }}>
+                        <KeyRound style={{ width: 16, height: 16, color: P.info }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>Contraseña</p>
+                        <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>Actualiza tu contraseña de acceso</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordModal(true)}
+                        className="px-3 py-1.5 rounded-xl bg-white flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
+                        style={{ fontSize: "0.75rem", fontWeight: 600, color: P.textPrimary, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+                      >
+                        Cambiar
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
             )}
 
+            {/* ── Activity ── */}
             {activeTab === "activity" && (
               <motion.div
                 key="activity"
@@ -542,30 +550,30 @@ export function Profile() {
                     const key = String(item.id);
                     const dotColor = ACTIVITY_COLOR[item.category] ?? P.default;
                     return (
-                    <motion.div
-                      key={key}
-                      ref={(el) => { if (el) activityRefs.current[key] = el; }}
-                      role="button"
-                      tabIndex={0}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.07 }}
-                      className="flex items-start gap-3 p-3.5 rounded-2xl transition-colors duration-200 cursor-pointer"
-                      style={{ backgroundColor: "transparent" }}
-                      onMouseEnter={() => handleActivityMouseEnter(key)}
-                      onMouseLeave={() => handleActivityMouseLeave(key)}
-                      onKeyDown={(e) => handleActivityKeyDown(e, key)}
-                      onTouchStart={() => handleActivityTouchStart(key)}
-                      onTouchEnd={() => handleActivityTouchEnd(key)}
-                      aria-label={`Actividad: ${item.action}, ${item.createdAt}`}
-                      aria-pressed={activeActivityId === key}
-                    >
-                      <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: dotColor }} />
-                      <div className="flex-1 min-w-0">
-                        <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.action}</p>
-                        <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>{item.createdAt}</p>
-                      </div>
-                    </motion.div>
+                      <motion.div
+                        key={key}
+                        ref={(el) => { if (el) activityRefs.current[key] = el; }}
+                        role="button"
+                        tabIndex={0}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.07 }}
+                        className="flex items-start gap-3 p-3.5 rounded-2xl transition-colors duration-200 cursor-pointer"
+                        style={{ backgroundColor: "transparent" }}
+                        onMouseEnter={() => handleActivityMouseEnter(key)}
+                        onMouseLeave={() => handleActivityMouseLeave(key)}
+                        onKeyDown={(e) => handleActivityKeyDown(e, key)}
+                        onTouchStart={() => handleActivityTouchStart(key)}
+                        onTouchEnd={() => handleActivityTouchEnd(key)}
+                        aria-label={`Actividad: ${item.action}, ${item.createdAt}`}
+                        aria-pressed={activeActivityId === key}
+                      >
+                        <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: dotColor }} />
+                        <div className="flex-1 min-w-0">
+                          <p style={{ fontSize: "0.88rem", fontWeight: 600, color: P.textPrimary }}>{item.action}</p>
+                          <p className="mt-0.5" style={{ fontSize: "0.75rem", color: P.default, fontWeight: 500 }}>{item.createdAt}</p>
+                        </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -574,6 +582,7 @@ export function Profile() {
           </AnimatePresence>
         </motion.div>
 
+        {/* ── Modal: editar bio ── */}
         <AnimatePresence>
           {showBioEditor && (
             <ModalShell onClose={() => setShowBioEditor(false)}>
@@ -598,13 +607,7 @@ export function Profile() {
                   onChange={(e) => setBioDraft(e.target.value)}
                   rows={5}
                   className="w-full px-4 py-3 rounded-2xl resize-none outline-none"
-                  style={{
-                    fontSize: "0.9rem",
-                    fontWeight: 500,
-                    color: P.textPrimary,
-                    backgroundColor: P.bg,
-                    border: `1.5px solid ${P.secondary}20`,
-                  }}
+                  style={{ fontSize: "0.9rem", fontWeight: 500, color: P.textPrimary, backgroundColor: P.bg, border: `1.5px solid ${P.secondary}20` }}
                   aria-label="Contenido de biografía"
                 />
                 <div className="flex justify-end gap-3 mt-5">
@@ -630,6 +633,7 @@ export function Profile() {
           )}
         </AnimatePresence>
 
+        {/* ── Modal: cambiar contraseña ── */}
         <AnimatePresence>
           {showPasswordModal && (
             <ModalShell onClose={() => setShowPasswordModal(false)}>
@@ -672,15 +676,8 @@ export function Profile() {
                           field.setter(e.target.value);
                           setPasswordError("");
                         }}
-                        className="w-full px-4 py-3 rounded-xl outline-none transition-all focus:ring-2"
-                        style={{
-                          fontSize: "0.88rem",
-                          fontWeight: 500,
-                          backgroundColor: P.bg,
-                          color: P.textPrimary,
-                          border: "1.5px solid transparent",
-                          outline: `2px solid ${P.info}`,
-                        }}
+                        className="w-full px-4 py-3 rounded-xl outline-none transition-all"
+                        style={{ fontSize: "0.88rem", fontWeight: 500, backgroundColor: P.bg, color: P.textPrimary, border: "1.5px solid transparent", outline: `2px solid ${P.info}` }}
                       />
                     </div>
                   ))}

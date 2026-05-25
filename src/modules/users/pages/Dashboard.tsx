@@ -32,6 +32,7 @@ import {
   ImageIcon,
   Paperclip,
   Loader2,
+  Search,
 } from "lucide-react";
 
 // ── Palette ───────────────────────────────────────
@@ -498,9 +499,10 @@ function InscriptionModal({
         logoUrl: null,
       });
       createdTeamId = team.id;
+      const newTeamId = team.id;
 
       // 2. Registrar al capitán como miembro con su dorsal
-      await teamService.addMember(createdTeamId, {
+      await teamService.addMember(newTeamId, {
         memberRole: "CAPTAIN",
         playerId: accountId,
         dorsal: captainNumber,
@@ -510,7 +512,7 @@ function InscriptionModal({
       // 3. Añadir los jugadores adicionales usando el teamId ya creado
       const playerResults = await Promise.allSettled(
         draftPlayers.map((p) =>
-          teamService.addMember(createdTeamId, {
+          teamService.addMember(newTeamId, {
             memberRole: "PLAYER",
             playerId: p.playerId,
             dorsal: p.dorsal,
@@ -894,6 +896,7 @@ export default function Dashboard() {
 
   const storedTeamContext = readUICache<StoredTeamContext | null>(TEAM_CONTEXT_STORAGE_KEY, null);
 
+  const [invitations] = useState<{ status: string }[]>([]);
   const [showLogout, setShowLogout] = useState(false);
   const [notifs, setNotifs] = useState<Notification[]>(() => readUICache<Notification[]>(TEAM_NOTIFS_STORAGE_KEY, initialNotifs));
   const [notifOpen, setNotifOpen] = useState(false);
@@ -950,7 +953,7 @@ export default function Dashboard() {
         setTeamLogoUrl(team.logoUrl ?? null);
         setTeamPrimaryColor(team.primaryColor ?? P.primary);
         setTeamSecondaryColor(team.secondaryColor ?? P.secondary);
-        setJoinedAt(team.joinedAt);
+        setJoinedAt(team.joinedAt ?? null);
         setTeamMembers((team.members ?? []).map((m) => ({ id: m.id, name: m.name ?? "", email: m.email ?? "", role: m.role ?? "Jugador", jerseyNumber: m.jerseyNumber ?? 0 })));
         setTeamSchedule(team.schedule ?? []);
       })
@@ -1314,6 +1317,48 @@ export default function Dashboard() {
             </div>
           )}
         </motion.div>
+
+        {/* ── Buscar / Invitaciones ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <Link to="/player-search">
+            <motion.div
+              whileHover={{ y: -3, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-white rounded-2xl p-4 flex items-center gap-4 cursor-pointer h-full"
+              style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "rgba(124,58,237,0.10)" }}>
+                <Search style={{ width: 22, height: 22, color: "#7C3AED" }} />
+              </div>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: "0.9rem", color: P.textPrimary }}>Buscar Jugadores</p>
+                <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 400 }}>Encuentra compañeros para tu equipo</p>
+              </div>
+            </motion.div>
+          </Link>
+
+          <Link to="/pending-invitations">
+            <motion.div
+              whileHover={{ y: -3, boxShadow: "0 12px 30px rgba(0,0,0,0.12)" }}
+              whileTap={{ scale: 0.98 }}
+              className="bg-white rounded-2xl p-4 flex items-center gap-4 cursor-pointer relative h-full"
+              style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "rgba(196,132,29,0.10)" }}>
+                <Bell style={{ width: 22, height: 22, color: P.secondary }} />
+              </div>
+              <div>
+                <p style={{ fontWeight: 700, fontSize: "0.9rem", color: P.textPrimary }}>Invitaciones Pendientes</p>
+                <p style={{ fontSize: "0.75rem", color: P.default, fontWeight: 400 }}>Revisa y responde invitaciones</p>
+              </div>
+              {invitations.filter((i) => i.status === "PENDING").length > 0 && (
+                <span className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: P.secondary, fontWeight: 700 }}>
+                  {invitations.filter((i) => i.status === "PENDING").length}
+                </span>
+              )}
+            </motion.div>
+          </Link>
+        </div>
 
         {/* ── Únete al Torneo ── */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.53, duration: 0.4 }} className="flex items-center gap-3 mb-4">
