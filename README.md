@@ -24,7 +24,6 @@
 - [Gestión del proyecto](#gestión-del-proyecto)
 - [CI/CD y Despliegue](#cicd-y-despliegue)
 - [Demo](#demo)
-- [Referencias](#referencias)
 
 ---
 
@@ -300,7 +299,7 @@ npm run typecheck
 
 ### Diseño (Figma)
 
-> [Enlace al diseño en Figma](https://figma.com/...)
+> [Enlace al diseño en Figma]([https://figma.com/...](https://www.figma.com/proto/m4xgM7RYjpayNq6roxn0II/TECHFUTBOL?node-id=0-1&t=HEeF4iGBMz6Nz2Ff-1))
 
 ### Diagrama de navegación entre pantallas
 
